@@ -218,13 +218,46 @@ servico-ja/
 A estrutura poderá ser ajustada conforme a evolução da implementação.
 
 ---
+## ⚙️ Como rodar o front-end
+
+### Pré-requisitos
+- Node.js (versão LTS)
+- VS Code com as extensões **Prettier** e **ESLint**
+- App **Expo Go** no celular (ou um emulador Android/iOS)
+
+### Instalação
+```bash
+cd servico-ja-mobile
+npm install
+npx expo start
+```
+Escaneie o QR Code com o Expo Go para abrir o app.
+
+### Padronização de código
+O projeto usa **Prettier** (formatação) e **ESLint** (erros e boas práticas)
+para que todo o time escreva código no mesmo estilo.
+
+- As regras do Prettier ficam em `.prettierrc`. Não altere sem avisar o time.
+- No VS Code, ative **Format On Save** e escolha **Prettier - Code formatter**
+  como formatador padrão (`Ctrl + ,` e pesquise por essas opções).
+- Formatar todo o código: `npx prettier --write src`
+- Verificar erros: `npx expo lint`
+
+### Arquivo `.npmrc`
+Contém `legacy-peer-deps=true`, que evita o erro `ERESOLVE` do npm causado
+por conflito de peer dependencies. Não remova.
+
+### Fluxo de branches
+- `master`: versão estável.
+- `develop`: integração do time.
+- Novas funcionalidades: `feature/nome-da-tarefa`, abertas a partir da `develop`.
 
 ## 🚀 Etapas de desenvolvimento
 
 O desenvolvimento será organizado em etapas para permitir a evolução gradual do produto.
 
 * [ ] Planejamento dos requisitos e prototipação das interfaces.
-* [ ] Configuração do ambiente de desenvolvimento.
+* [x] Configuração do ambiente de desenvolvimento.
 * [ ] Modelagem e implementação do banco de dados.
 * [ ] Desenvolvimento do backend e da API REST.
 * [ ] Implementação do cadastro e da autenticação.
