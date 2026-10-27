@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* Tokens do protótipo ChamaLÁ (Figma) */
+@theme {
+  --color-primary: #1e3a5f;
+  --color-gold: #b8860b;
+  --color-cream: #f5f0e8;
+  --color-line: #dcd5cc;
+  --color-muted: #5e5a54;
+  --font-sans: "Geist", system-ui, sans-serif;
+}
+
+body {
+  @apply bg-cream text-[#111] antialiased;
+}

@@ -1,0 +1,34 @@
+# Ambiente local do ChamaLÁ.
+#   docker compose up -d --build   → banco (PostGIS) + API em http://localhost:8080
+#   docker compose up -d db        → só o banco (para rodar a API pelo Maven/IDE)
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: chamala
+      POSTGRES_USER: chamala
+      POSTGRES_PASSWORD: chamala
+    ports:
+      - "5432:5432"
+    volumes:
+      - chamala-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chamala -d chamala"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./chamala-backend
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/chamala
+      DB_USER: chamala
+      DB_PASSWORD: chamala
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  chamala-db:

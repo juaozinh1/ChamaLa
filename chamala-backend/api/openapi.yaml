@@ -1,0 +1,1740 @@
+openapi: 3.1.0
+info:
+  title: ChamaLÁ API
+  version: 1.0.0-draft
+  summary: Contrato v1 da API REST do ChamaLÁ (fase 1 do roadmap).
+  description: |
+    API usada pelo app mobile (clientes e profissionais) e pelo painel admin web.
+
+    Convenções:
+    - Valores em dinheiro são inteiros em **centavos** (`priceCents: 15000` = R$ 150,00).
+    - Datas em ISO 8601 (`2026-11-03`), horários em `HH:mm`, instantes em UTC (`2026-11-03T12:00:00Z`).
+    - Erros seguem RFC 9457 (`application/problem+json`).
+    - Distâncias são sempre arredondadas a 0,1 km; a API nunca devolve a coordenada do profissional.
+    - Listas paginadas usam `page` (começa em 0) e `size` (padrão 20, máximo 50).
+  contact:
+    name: Time ChamaLÁ
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Desenvolvimento local (localhost)
+  - url: https://chamala-api.onrender.com/api/v1
+    description: Hospedagem gratuita (Render), quando publicada
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: Cadastro, login e tokens
+  - name: Usuário
+    description: Conta logada e preferências
+  - name: Categorias
+    description: Categorias de serviço
+  - name: Busca
+    description: Busca de profissionais por proximidade
+  - name: Profissional
+    description: Perfil público e área do profissional
+  - name: Serviços
+    description: Serviços de preço fixo
+  - name: Política
+    description: Política de cancelamento e sinal
+  - name: Verificação
+    description: Documentos e status de verificação
+  - name: Pedidos
+    description: Ciclo de vida do pedido
+  - name: Orçamento
+    description: Pedido de orçamento e resposta
+  - name: Contrato
+    description: Contrato padrão do pedido
+  - name: Cancelamento
+    description: Simulação e cancelamento com multa
+  - name: Reagendamento
+    description: Propostas de nova data
+  - name: Avaliações
+    description: Avaliação após serviço concluído
+  - name: Denúncias
+    description: Denúncias de usuários
+  - name: Admin
+    description: Painel administrativo web (papel ADMIN)
+
+paths:
+  # ─── Auth ────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Cadastrar cliente ou profissional
+      description: Cria a conta e já devolve os tokens. O aceite dos termos é obrigatório (LGPD).
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RegisterRequest'}
+      responses:
+        '201':
+          description: Conta criada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthTokens'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/Conflict'}
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Entrar com e-mail e senha
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+      responses:
+        '200':
+          description: Autenticado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthTokens'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403':
+          description: Conta suspensa
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Trocar o refresh token por um novo par de tokens
+      description: O refresh token usado é revogado (rotação).
+      operationId: refreshTokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RefreshRequest'}
+      responses:
+        '200':
+          description: Novos tokens
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthTokens'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Sair e revogar o refresh token
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RefreshRequest'}
+      responses:
+        '204': {description: Sessão encerrada}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Pedir e-mail de recuperação de senha
+      description: Responde 202 mesmo se o e-mail não existir, para não revelar contas.
+      operationId: forgotPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: {type: string, format: email}
+      responses:
+        '202': {description: 'Se a conta existir, o e-mail foi enviado'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Definir nova senha com o código recebido por e-mail
+      operationId: resetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: {type: string}
+                newPassword: {$ref: '#/components/schemas/Password'}
+      responses:
+        '204': {description: Senha alterada}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  # ─── Usuário ─────────────────────────────────────────────────────────────
+  /me:
+    get:
+      tags: [Usuário]
+      summary: Dados da conta logada
+      operationId: getMe
+      responses:
+        '200':
+          description: Conta
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Me'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+    patch:
+      tags: [Usuário]
+      summary: Editar dados pessoais e preferências de acessibilidade
+      operationId: updateMe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateMeRequest'}
+      responses:
+        '200':
+          description: Conta atualizada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Me'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+    delete:
+      tags: [Usuário]
+      summary: Excluir a conta (LGPD)
+      description: Anonimiza dados pessoais; pedidos e contratos ficam com dados mínimos exigidos por lei.
+      operationId: deleteMe
+      responses:
+        '204': {description: Conta excluída}
+        '409':
+          description: Há pedidos confirmados em aberto
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+
+  /me/password:
+    patch:
+      tags: [Usuário]
+      summary: Trocar a senha
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: {type: string}
+                newPassword: {$ref: '#/components/schemas/Password'}
+      responses:
+        '204': {description: Senha alterada}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  # ─── Categorias ──────────────────────────────────────────────────────────
+  /categories:
+    get:
+      tags: [Categorias]
+      summary: Listar as categorias de serviço
+      operationId: listCategories
+      security: []
+      responses:
+        '200':
+          description: Categorias, na ordem de exibição
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Category'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+
+  # ─── Busca e perfil público ──────────────────────────────────────────────
+  /professionals:
+    get:
+      tags: [Busca]
+      summary: Buscar profissionais próximos
+      description: |
+        Filtra por raio (`ST_DWithin`) e ordena por distância e nota.
+        Só retorna profissionais verificados, disponíveis e com conta ativa.
+      operationId: searchProfessionals
+      parameters:
+        - {name: lat, in: query, required: true, schema: {type: number, minimum: -90, maximum: 90}}
+        - {name: lng, in: query, required: true, schema: {type: number, minimum: -180, maximum: 180}}
+        - {name: radiusKm, in: query, schema: {type: integer, minimum: 1, maximum: 50, default: 10}}
+        - {name: categoryId, in: query, schema: {type: integer}}
+        - {name: q, in: query, description: Texto livre (nome ou especialidade), schema: {type: string, maxLength: 80}}
+        - name: sort
+          in: query
+          schema: {type: string, enum: [distance, rating], default: distance}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Página de resultados
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/ProfessionalSummary'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  /professionals/{professionalId}:
+    parameters:
+      - $ref: '#/components/parameters/ProfessionalId'
+    get:
+      tags: [Profissional]
+      summary: Perfil público do profissional
+      operationId: getProfessional
+      parameters:
+        - name: lat
+          in: query
+          description: Posição do cliente, para calcular a distância
+          schema: {type: number}
+        - name: lng
+          in: query
+          schema: {type: number}
+      responses:
+        '200':
+          description: Perfil
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProfessionalDetail'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /professionals/{professionalId}/services:
+    parameters:
+      - $ref: '#/components/parameters/ProfessionalId'
+    get:
+      tags: [Profissional]
+      summary: Serviços de preço fixo ativos do profissional
+      operationId: listProfessionalServices
+      responses:
+        '200':
+          description: Serviços
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ProfessionalService'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /professionals/{professionalId}/reviews:
+    parameters:
+      - $ref: '#/components/parameters/ProfessionalId'
+    get:
+      tags: [Profissional]
+      summary: Avaliações do profissional, mais recentes primeiro
+      operationId: listProfessionalReviews
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Página de avaliações
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/Review'}
+
+  # ─── Área do profissional ────────────────────────────────────────────────
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /me/professional:
+    get:
+      tags: [Profissional]
+      summary: Perfil profissional da conta logada
+      operationId: getMyProfessionalProfile
+      responses:
+        '200':
+          description: Perfil
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MyProfessionalProfile'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    put:
+      tags: [Profissional]
+      summary: Criar ou atualizar o perfil profissional (etapa 1 do cadastro)
+      operationId: upsertMyProfessionalProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProfessionalProfileInput'}
+      responses:
+        '200':
+          description: Perfil salvo
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MyProfessionalProfile'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /me/professional/availability:
+    patch:
+      tags: [Profissional]
+      summary: Ligar ou desligar a disponibilidade
+      operationId: setAvailability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [available]
+              properties:
+                available: {type: boolean}
+      responses:
+        '204': {description: Disponibilidade alterada}
+        '409':
+          description: Só profissionais verificados podem ficar disponíveis
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+
+  /me/professional/services:
+    get:
+      tags: [Serviços]
+      summary: Listar meus serviços (ativos e inativos)
+      operationId: listMyServices
+      responses:
+        '200':
+          description: Serviços
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ProfessionalService'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+    post:
+      tags: [Serviços]
+      summary: Cadastrar serviço de preço fixo
+      operationId: createMyService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProfessionalServiceInput'}
+      responses:
+        '201':
+          description: Serviço criado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProfessionalService'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  /me/professional/services/{serviceId}:
+    parameters:
+      - name: serviceId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    patch:
+      tags: [Serviços]
+      summary: Editar serviço (o novo preço vale só para pedidos futuros)
+      operationId: updateMyService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProfessionalServicePatch'}
+      responses:
+        '200':
+          description: Serviço atualizado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProfessionalService'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [Serviços]
+      summary: Desativar serviço
+      description: O serviço deixa de aparecer, mas continua ligado aos pedidos antigos.
+      operationId: deleteMyService
+      responses:
+        '204': {description: Serviço desativado}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /me/professional/policy:
+    get:
+      tags: [Política]
+      summary: Minha política de cancelamento e sinal
+      operationId: getMyPolicy
+      responses:
+        '200':
+          description: Política vigente
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CancellationPolicy'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+    put:
+      tags: [Política]
+      summary: Definir política de cancelamento e sinal
+      description: Vale para pedidos novos; contratos já gerados mantêm a política da época.
+      operationId: updateMyPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CancellationPolicy'}
+      responses:
+        '200':
+          description: Política salva
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CancellationPolicy'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  /me/professional/documents:
+    post:
+      tags: [Verificação]
+      summary: Enviar um documento de verificação ou foto de trabalho
+      description: |
+        Imagens JPEG/PNG até 5 MB, PDF até 10 MB. O app comprime fotos antes do envio.
+        Selfie, documento frente e verso são obrigatórios; até 6 fotos de trabalhos (PORTFOLIO).
+      operationId: uploadDocument
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [type, file]
+              properties:
+                type: {$ref: '#/components/schemas/DocumentType'}
+                file: {type: string, format: binary}
+      responses:
+        '201':
+          description: Documento recebido
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VerificationDocument'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '413':
+          description: Arquivo grande demais
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+
+  /me/professional/verification:
+    get:
+      tags: [Verificação]
+      summary: Situação da minha verificação
+      operationId: getMyVerification
+      responses:
+        '200':
+          description: Situação e documentos enviados
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VerificationSummary'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+    post:
+      tags: [Verificação]
+      summary: Enviar a verificação para análise
+      description: Exige selfie, ID_FRONT e ID_BACK enviados. Muda o status para PENDING.
+      operationId: submitVerification
+      responses:
+        '202':
+          description: Enviada para análise
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VerificationSummary'}
+        '409':
+          description: Faltam documentos obrigatórios
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+
+  # ─── Pedidos ─────────────────────────────────────────────────────────────
+  /requests:
+    post:
+      tags: [Pedidos]
+      summary: Agendar serviço de preço fixo ou pedir orçamento
+      description: |
+        FIXED: cria o pedido em PENDING com o preço do serviço.
+        QUOTE: cria em QUOTE_REQUESTED, sem preço, até o profissional responder.
+      operationId: createRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRequestInput'}
+      responses:
+        '201':
+          description: Pedido criado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409':
+          description: Profissional indisponível ou horário ocupado
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+    get:
+      tags: [Pedidos]
+      summary: Meus pedidos, como cliente ou como profissional
+      operationId: listRequests
+      parameters:
+        - name: role
+          in: query
+          required: true
+          schema: {type: string, enum: [client, professional]}
+        - name: status
+          in: query
+          description: Um ou mais status separados por vírgula
+          schema: {type: string, example: 'PENDING,QUOTE_REQUESTED'}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Página de pedidos, mais recentes primeiro
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/ServiceRequest'}
+
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /requests/{requestId}:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Pedidos]
+      summary: Detalhe do pedido
+      description: O endereço exato só aparece para o profissional depois que o pedido é confirmado.
+      operationId: getRequest
+      responses:
+        '200':
+          description: Pedido
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /requests/{requestId}/accept:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Pedidos]
+      summary: Profissional aceita um pedido de preço fixo
+      description: PENDING → aguarda o aceite do contrato pelas duas partes; ao completar, CONFIRMED.
+      operationId: acceptRequest
+      responses:
+        '200':
+          description: Pedido aceito; contrato gerado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  /requests/{requestId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Pedidos]
+      summary: Profissional recusa o pedido (sem multa)
+      operationId: rejectRequest
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: {type: string, maxLength: 300}
+      responses:
+        '200':
+          description: Pedido recusado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  /requests/{requestId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Pedidos]
+      summary: Marcar o serviço como concluído
+      description: CONFIRMED → COMPLETED. Libera a avaliação pelo cliente.
+      operationId: completeRequest
+      responses:
+        '200':
+          description: Pedido concluído
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  # ─── Orçamento ───────────────────────────────────────────────────────────
+  /requests/{requestId}/quote:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Orçamento]
+      summary: Profissional envia o valor do orçamento
+      description: QUOTE_REQUESTED → QUOTED.
+      operationId: sendQuote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/QuoteInput'}
+      responses:
+        '200':
+          description: Orçamento enviado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  /requests/{requestId}/quote/accept:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Orçamento]
+      summary: Cliente aceita o orçamento
+      description: QUOTED → contrato gerado; após o aceite do contrato pelas duas partes, CONFIRMED.
+      operationId: acceptQuote
+      responses:
+        '200':
+          description: Orçamento aceito; contrato gerado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  /requests/{requestId}/quote/decline:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Orçamento]
+      summary: Cliente recusa o orçamento (sem multa)
+      description: QUOTED → QUOTE_DECLINED.
+      operationId: declineQuote
+      responses:
+        '200':
+          description: Orçamento recusado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  # ─── Contrato ────────────────────────────────────────────────────────────
+  /requests/{requestId}/contract:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Contrato]
+      summary: Contrato do pedido
+      operationId: getContract
+      responses:
+        '200':
+          description: Contrato
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Contract'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /requests/{requestId}/contract/accept:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags: [Contrato]
+      summary: Aceitar o contrato (cliente ou profissional)
+      description: |
+        Registra data/hora do aceite de quem chama. Quando as duas partes aceitam,
+        o pedido vai para CONFIRMED e o PDF é gerado.
+        `contentHash` precisa ser igual ao do contrato exibido, para garantir que a pessoa aceitou aquele texto.
+      operationId: acceptContract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contentHash]
+              properties:
+                contentHash: {type: string, pattern: '^[a-f0-9]{64}$'}
+      responses:
+        '200':
+          description: Aceite registrado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Contract'}
+        '409':
+          description: Hash diferente ou aceite já registrado
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+
+  /requests/{requestId}/contract/pdf:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Contrato]
+      summary: Link temporário para baixar o PDF do contrato
+      operationId: getContractPdf
+      responses:
+        '200':
+          description: URL assinada, válida por 5 minutos
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SignedUrl'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  # ─── Cancelamento ────────────────────────────────────────────────────────
+  /requests/{requestId}/cancellation-preview:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Cancelamento]
+      summary: Simular o cancelamento antes de confirmar
+      description: Mostra se há multa, o valor e até quando cancelar sem multa.
+      operationId: previewCancellation
+      responses:
+        '200':
+          description: Simulação
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CancellationPreview'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  /requests/{requestId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    patch:
+      tags: [Cancelamento]
+      summary: Cancelar o pedido
+      description: |
+        Qualquer parte pode cancelar. Se o cliente cancelar um pedido CONFIRMED com menos horas
+        que `cancelMinHours` antes do horário, a multa do contrato é registrada.
+        `expectedFeeCents` precisa ser igual ao da simulação (evita multa surpresa).
+      operationId: cancelRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CancelInput'}
+      responses:
+        '200':
+          description: Pedido cancelado
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceRequest'}
+        '409':
+          description: Transição inválida ou multa diferente da simulada
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+
+  # ─── Reagendamento ───────────────────────────────────────────────────────
+  /requests/{requestId}/reschedules:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Reagendamento]
+      summary: Propostas de reagendamento do pedido
+      operationId: listReschedules
+      responses:
+        '200':
+          description: Propostas, mais recentes primeiro
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/RescheduleProposal'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+    post:
+      tags: [Reagendamento]
+      summary: Propor nova data e horário
+      description: Só para pedidos CONFIRMED e uma proposta pendente por vez. Não gera multa.
+      operationId: proposeReschedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RescheduleInput'}
+      responses:
+        '201':
+          description: Proposta enviada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RescheduleProposal'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  /reschedules/{rescheduleId}:
+    parameters:
+      - name: rescheduleId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    patch:
+      tags: [Reagendamento]
+      summary: A outra parte aceita ou recusa a proposta
+      description: Aceita → data e horário do pedido mudam e o fato fica registrado no contrato.
+      operationId: decideReschedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: {type: string, enum: [ACCEPTED, DECLINED]}
+      responses:
+        '200':
+          description: Decisão registrada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RescheduleProposal'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/InvalidTransition'}
+
+  # ─── Avaliações e denúncias ──────────────────────────────────────────────
+  /requests/{requestId}/review:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags: [Avaliações]
+      summary: Cliente avalia o serviço concluído
+      description: Uma vez por pedido e só com status COMPLETED.
+      operationId: createReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReviewInput'}
+      responses:
+        '201':
+          description: Avaliação publicada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Review'}
+        '409':
+          description: Pedido não concluído ou já avaliado
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+
+  /reports:
+    post:
+      tags: [Denúncias]
+      summary: Denunciar um usuário
+      operationId: createReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReportInput'}
+      responses:
+        '201':
+          description: Denúncia registrada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Report'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  # ─── Admin (painel web) ──────────────────────────────────────────────────
+  /admin/verifications:
+    get:
+      tags: [Admin]
+      summary: Fila de verificação
+      operationId: adminListVerifications
+      parameters:
+        - name: status
+          in: query
+          schema: {$ref: '#/components/schemas/VerificationStatus'}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Profissionais, os mais antigos na fila primeiro
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/AdminVerificationItem'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+
+  /admin/verifications/{professionalId}:
+    parameters:
+      - $ref: '#/components/parameters/ProfessionalId'
+    get:
+      tags: [Admin]
+      summary: Documentos de um profissional, com URLs assinadas
+      operationId: adminGetVerification
+      responses:
+        '200':
+          description: Dados para análise
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminVerificationDetail'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Admin]
+      summary: Aprovar ou recusar a verificação
+      operationId: adminDecideVerification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VerificationDecision'}
+      responses:
+        '200':
+          description: Decisão registrada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VerificationSummary'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  /admin/reports:
+    get:
+      tags: [Admin]
+      summary: Denúncias
+      operationId: adminListReports
+      parameters:
+        - name: status
+          in: query
+          schema: {type: string, enum: [OPEN, RESOLVED, DISMISSED]}
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: Página de denúncias
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageMeta'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: {$ref: '#/components/schemas/Report'}
+
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /admin/reports/{reportId}:
+    parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    patch:
+      tags: [Admin]
+      summary: Resolver ou arquivar denúncia
+      operationId: adminDecideReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: {type: string, enum: [RESOLVED, DISMISSED]}
+                note: {type: string, maxLength: 500}
+      responses:
+        '200':
+          description: Denúncia atualizada
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Report'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+  /admin/users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Admin]
+      summary: Ficha do usuário (pedidos, avaliações, denúncias)
+      operationId: adminGetUser
+      responses:
+        '200':
+          description: Ficha
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUserDetail'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /admin/users/{userId}/status:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    patch:
+      tags: [Admin]
+      summary: Suspender ou reativar conta
+      operationId: adminSetUserStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, reason]
+              properties:
+                status: {type: string, enum: [ACTIVE, SUSPENDED]}
+                reason: {type: string, minLength: 5, maxLength: 500}
+      responses:
+        '204': {description: Status alterado}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+  /admin/requests/{requestId}:
+    parameters:
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags: [Admin]
+      summary: Pedido com contrato, cancelamentos e reagendamentos, para mediar conflitos
+      operationId: adminGetRequest
+      responses:
+        '200':
+          description: Pedido completo
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminRequestDetail'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token de 15 minutos. Renove com /auth/refresh.
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 0, default: 0}
+    Size:
+      name: size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 50, default: 20}
+    ProfessionalId:
+      name: professionalId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+
+  responses:
+    BadRequest:
+      description: Dados inválidos
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Unauthorized:
+      description: Sem login ou token inválido
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Forbidden:
+      description: Papel sem permissão para esta ação
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    NotFound:
+      description: Não encontrado (ou sem acesso)
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    Conflict:
+      description: 'Conflito (ex.: e-mail já cadastrado)'
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    InvalidTransition:
+      description: O status atual do pedido não permite esta ação
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    TooManyRequests:
+      description: Muitas requisições; tente de novo em instantes
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+
+  schemas:
+    # ─── Básicos ─────────────────────────────────────────────────────────
+    Problem:
+      type: object
+      description: Erro no formato RFC 9457
+      required: [title, status]
+      properties:
+        type: {type: string, format: uri, default: about:blank}
+        title: {type: string, example: Dados inválidos}
+        status: {type: integer, example: 400}
+        detail: {type: string}
+        code:
+          type: string
+          description: Código estável para o app tratar
+          example: INVALID_TRANSITION
+        errors:
+          type: array
+          description: Erros por campo
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: {type: string, example: email}
+              message: {type: string, example: já cadastrado}
+    PageMeta:
+      type: object
+      required: [page, size, totalItems, totalPages]
+      properties:
+        page: {type: integer}
+        size: {type: integer}
+        totalItems: {type: integer}
+        totalPages: {type: integer}
+    Password:
+      type: string
+      format: password
+      minLength: 8
+      maxLength: 72
+    Cents:
+      type: integer
+      minimum: 0
+      description: Valor em centavos de real
+      example: 15000
+    TimeSlot:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+      example: '09:00'
+    SignedUrl:
+      type: object
+      required: [url, expiresAt]
+      properties:
+        url: {type: string, format: uri}
+        expiresAt: {type: string, format: date-time}
+
+    # ─── Auth e usuário ──────────────────────────────────────────────────
+    Role:
+      type: string
+      enum: [CLIENT, PROFESSIONAL, ADMIN]
+    TextSize:
+      type: string
+      enum: [normal, large, extra-large]
+    RegisterRequest:
+      type: object
+      required: [name, email, password, role, acceptedTermsVersion]
+      properties:
+        name: {type: string, minLength: 2, maxLength: 120}
+        email: {type: string, format: email, maxLength: 180}
+        password: {$ref: '#/components/schemas/Password'}
+        phone: {type: string, pattern: '^\+?[0-9]{10,13}$', example: '81999990000'}
+        role:
+          type: string
+          enum: [CLIENT, PROFESSIONAL]
+          description: ADMIN não pode se cadastrar pelo app
+        neighborhood: {type: string, maxLength: 120}
+        city: {type: string, maxLength: 120}
+        acceptedTermsVersion:
+          type: string
+          description: Versão dos termos exibida e aceita no cadastro
+          example: '2026-11-v1'
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string}
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: {type: string}
+    AuthTokens:
+      type: object
+      required: [accessToken, refreshToken, expiresIn, user]
+      properties:
+        accessToken: {type: string}
+        refreshToken: {type: string}
+        expiresIn: {type: integer, description: Segundos até o access token expirar, example: 900}
+        user: {$ref: '#/components/schemas/Me'}
+    Me:
+      type: object
+      required: [id, name, email, role, status, textSize, highContrast]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        email: {type: string, format: email}
+        phone: {type: [string, 'null']}
+        role: {$ref: '#/components/schemas/Role'}
+        status: {type: string, enum: [ACTIVE, SUSPENDED]}
+        neighborhood: {type: [string, 'null']}
+        city: {type: [string, 'null']}
+        textSize: {$ref: '#/components/schemas/TextSize'}
+        highContrast: {type: boolean}
+    UpdateMeRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 2, maxLength: 120}
+        phone: {type: string, pattern: '^\+?[0-9]{10,13}$'}
+        neighborhood: {type: string, maxLength: 120}
+        city: {type: string, maxLength: 120}
+        textSize: {$ref: '#/components/schemas/TextSize'}
+        highContrast: {type: boolean}
+
+    # ─── Catálogo e profissional ─────────────────────────────────────────
+    Category:
+      type: object
+      required: [id, name, icon, color]
+      properties:
+        id: {type: integer, example: 1}
+        name: {type: string, example: Limpeza}
+        icon: {type: string, example: '🧹'}
+        color: {type: string, example: '#e8f4fd'}
+    VerificationStatus:
+      type: string
+      enum: [NOT_SUBMITTED, PENDING, APPROVED, REJECTED]
+    ProfessionalSummary:
+      type: object
+      required: [id, name, primaryCategory, ratingAvg, ratingCount, distanceKm, verified]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        avatarUrl: {type: [string, 'null'], format: uri}
+        primaryCategory: {$ref: '#/components/schemas/Category'}
+        ratingAvg: {type: number, minimum: 0, maximum: 5, example: 4.9}
+        ratingCount: {type: integer, example: 127}
+        distanceKm: {type: number, description: 'Arredondada a 0,1 km', example: 1.2}
+        startingPriceCents:
+          description: Menor preço fixo entre os serviços ativos; null se só faz orçamento
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+        verified: {type: boolean}
+    ProfessionalDetail:
+      allOf:
+        - $ref: '#/components/schemas/ProfessionalSummary'
+        - type: object
+          required: [categories, policy, acceptsQuotes, portfolio]
+          properties:
+            bio: {type: [string, 'null']}
+            neighborhood: {type: [string, 'null']}
+            city: {type: [string, 'null']}
+            categories:
+              type: array
+              items: {$ref: '#/components/schemas/Category'}
+            policy: {$ref: '#/components/schemas/CancellationPolicy'}
+            acceptsQuotes: {type: boolean}
+            portfolio:
+              type: array
+              maxItems: 6
+              items: {type: string, format: uri}
+    ProfessionalProfileInput:
+      type: object
+      required: [primaryCategoryId, latitude, longitude, serviceRadiusKm, city]
+      properties:
+        bio: {type: string, maxLength: 1000}
+        primaryCategoryId: {type: integer}
+        otherCategoryIds:
+          type: array
+          maxItems: 4
+          items: {type: integer}
+        latitude: {type: number, minimum: -90, maximum: 90}
+        longitude: {type: number, minimum: -180, maximum: 180}
+        serviceRadiusKm: {type: integer, minimum: 1, maximum: 50}
+        neighborhood: {type: string, maxLength: 120}
+        city: {type: string, maxLength: 120}
+        acceptsQuotes: {type: boolean, default: true}
+    MyProfessionalProfile:
+      allOf:
+        - $ref: '#/components/schemas/ProfessionalDetail'
+        - type: object
+          required: [available, verificationStatus, serviceRadiusKm]
+          properties:
+            available: {type: boolean}
+            verificationStatus: {$ref: '#/components/schemas/VerificationStatus'}
+            serviceRadiusKm: {type: integer}
+    ProfessionalService:
+      type: object
+      required: [id, categoryId, title, priceCents, active]
+      properties:
+        id: {type: string, format: uuid}
+        categoryId: {type: integer}
+        title: {type: string, example: Instalação de chuveiro}
+        description: {type: [string, 'null']}
+        priceCents: {$ref: '#/components/schemas/Cents'}
+        active: {type: boolean}
+    ProfessionalServiceInput:
+      type: object
+      required: [categoryId, title, priceCents]
+      properties:
+        categoryId: {type: integer}
+        title: {type: string, minLength: 3, maxLength: 120}
+        description: {type: string, maxLength: 500}
+        priceCents: {type: integer, minimum: 500, description: 'Mínimo R$ 5,00'}
+    ProfessionalServicePatch:
+      type: object
+      minProperties: 1
+      properties:
+        title: {type: string, minLength: 3, maxLength: 120}
+        description: {type: string, maxLength: 500}
+        priceCents: {type: integer, minimum: 500}
+        active: {type: boolean}
+    CancellationPolicy:
+      type: object
+      required: [cancelMinHours, cancelFeePct, depositPct]
+      properties:
+        cancelMinHours:
+          type: integer
+          minimum: 0
+          maximum: 168
+          description: Antecedência mínima para cancelar sem multa, em horas
+          example: 24
+        cancelFeePct:
+          type: integer
+          minimum: 10
+          maximum: 20
+          description: Multa sobre o valor do serviço quando o cancelamento é fora do prazo
+          example: 15
+        depositPct:
+          type: integer
+          minimum: 0
+          maximum: 50
+          description: Sinal no agendamento (0 = sem sinal), abatido do valor final
+          example: 0
+
+    # ─── Verificação ─────────────────────────────────────────────────────
+    DocumentType:
+      type: string
+      enum: [SELFIE, ID_FRONT, ID_BACK, CERTIFICATE, EXTRA, PORTFOLIO]
+    VerificationDocument:
+      type: object
+      required: [id, type, status, uploadedAt]
+      properties:
+        id: {type: string, format: uuid}
+        type: {$ref: '#/components/schemas/DocumentType'}
+        status: {type: string, enum: [PENDING, APPROVED, REJECTED]}
+        rejectionReason: {type: [string, 'null']}
+        uploadedAt: {type: string, format: date-time}
+    VerificationSummary:
+      type: object
+      required: [status, documents, missing]
+      properties:
+        status: {$ref: '#/components/schemas/VerificationStatus'}
+        rejectionReason: {type: [string, 'null']}
+        documents:
+          type: array
+          items: {$ref: '#/components/schemas/VerificationDocument'}
+        missing:
+          type: array
+          description: Documentos obrigatórios que faltam enviar
+          items: {$ref: '#/components/schemas/DocumentType'}
+    VerificationDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: {type: string, enum: [APPROVED, REJECTED]}
+        rejectionReason:
+          type: string
+          minLength: 5
+          maxLength: 500
+          description: Obrigatório quando REJECTED; o profissional vê este texto
+
+    # ─── Pedidos ─────────────────────────────────────────────────────────
+    RequestType:
+      type: string
+      enum: [FIXED, QUOTE]
+    RequestStatus:
+      type: string
+      enum: [PENDING, QUOTE_REQUESTED, QUOTED, CONFIRMED, COMPLETED, CANCELED, REJECTED, QUOTE_DECLINED]
+      description: |
+        FIXED: PENDING → CONFIRMED → COMPLETED (ou REJECTED / CANCELED).
+        QUOTE: QUOTE_REQUESTED → QUOTED → CONFIRMED → COMPLETED (ou QUOTE_DECLINED / CANCELED).
+    CreateRequestInput:
+      type: object
+      required: [type, professionalId, scheduledDate, timeSlot, addressText, latitude, longitude]
+      properties:
+        type: {$ref: '#/components/schemas/RequestType'}
+        professionalId: {type: string, format: uuid}
+        serviceId:
+          type: string
+          format: uuid
+          description: Obrigatório quando type = FIXED
+        categoryId:
+          type: integer
+          description: Obrigatório quando type = QUOTE
+        description:
+          type: string
+          maxLength: 1000
+          description: Obrigatório quando type = QUOTE (o que precisa ser feito)
+        scheduledDate: {type: string, format: date}
+        timeSlot: {$ref: '#/components/schemas/TimeSlot'}
+        addressText: {type: string, minLength: 5, maxLength: 300}
+        latitude: {type: number}
+        longitude: {type: number}
+        notes: {type: string, maxLength: 500}
+        photos:
+          type: array
+          maxItems: 3
+          description: Fotos do problema (orçamento), enviadas antes como uploads temporários
+          items: {type: string, format: uuid}
+    PartySummary:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        avatarUrl: {type: [string, 'null'], format: uri}
+    ServiceRequest:
+      type: object
+      required: [id, type, status, client, professional, category, scheduledDate, timeSlot, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        type: {$ref: '#/components/schemas/RequestType'}
+        status: {$ref: '#/components/schemas/RequestStatus'}
+        client: {$ref: '#/components/schemas/PartySummary'}
+        professional: {$ref: '#/components/schemas/PartySummary'}
+        category: {$ref: '#/components/schemas/Category'}
+        serviceTitle:
+          type: [string, 'null']
+          description: Título do serviço (FIXED) ou null (QUOTE)
+        description: {type: [string, 'null']}
+        scheduledDate: {type: string, format: date}
+        timeSlot: {$ref: '#/components/schemas/TimeSlot'}
+        addressText:
+          type: [string, 'null']
+          description: null para o profissional enquanto o pedido não estiver confirmado
+        neighborhood: {type: [string, 'null']}
+        notes: {type: [string, 'null']}
+        priceCents:
+          description: null enquanto o orçamento não for enviado
+          oneOf:
+            - $ref: '#/components/schemas/Cents'
+            - type: 'null'
+        depositCents: {$ref: '#/components/schemas/Cents'}
+        quoteValidUntil:
+          type: [string, 'null']
+          format: date-time
+          description: Até quando o orçamento enviado vale
+        cancelFeeCents: {$ref: '#/components/schemas/Cents'}
+        canceledBy:
+          type: [string, 'null']
+          enum: [CLIENT, PROFESSIONAL, null]
+        contractStatus:
+          type: string
+          enum: [NONE, AWAITING_CLIENT, AWAITING_PROFESSIONAL, SIGNED]
+        reviewed: {type: boolean}
+        allowedActions:
+          type: array
+          description: Ações que a pessoa logada pode fazer agora; o app usa para mostrar os botões
+          items:
+            type: string
+            enum: [ACCEPT, REJECT, SEND_QUOTE, ACCEPT_QUOTE, DECLINE_QUOTE, ACCEPT_CONTRACT, CANCEL, RESCHEDULE, COMPLETE, REVIEW, REPORT]
+        createdAt: {type: string, format: date-time}
+    QuoteInput:
+      type: object
+      required: [priceCents]
+      properties:
+        priceCents: {type: integer, minimum: 500}
+        message: {type: string, maxLength: 500}
+        validDays:
+          type: integer
+          minimum: 1
+          maximum: 30
+          default: 7
+          description: Dias de validade do orçamento (proposta; ver questões em aberto)
+
+    # ─── Contrato e cancelamento ─────────────────────────────────────────
+    Contract:
+      type: object
+      required: [id, requestId, termsVersion, priceCents, depositCents, policy, contentHash, text, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        requestId: {type: string, format: uuid}
+        termsVersion: {type: string, example: '2026-11-v1'}
+        priceCents: {$ref: '#/components/schemas/Cents'}
+        depositCents: {$ref: '#/components/schemas/Cents'}
+        policy: {$ref: '#/components/schemas/CancellationPolicy'}
+        contentHash:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: SHA-256 do texto do contrato
+        text:
+          type: string
+          description: Texto completo em Markdown, preenchido com os dados do pedido
+        clientAcceptedAt: {type: [string, 'null'], format: date-time}
+        professionalAcceptedAt: {type: [string, 'null'], format: date-time}
+        createdAt: {type: string, format: date-time}
+    CancellationPreview:
+      type: object
+      required: [hasFee, feeCents, freeUntil, scheduledAt]
+      properties:
+        hasFee: {type: boolean}
+        feeCents: {$ref: '#/components/schemas/Cents'}
+        feePct: {type: integer, description: Percentual aplicado (0 se sem multa)}
+        freeUntil:
+          type: string
+          format: date-time
+          description: Último instante para cancelar sem multa
+        scheduledAt: {type: string, format: date-time}
+        depositRefundCents:
+          $ref: '#/components/schemas/Cents'
+    CancelInput:
+      type: object
+      required: [reason, expectedFeeCents]
+      properties:
+        reason: {type: string, minLength: 3, maxLength: 300}
+        expectedFeeCents: {$ref: '#/components/schemas/Cents'}
+    RescheduleInput:
+      type: object
+      required: [newDate, newTimeSlot]
+      properties:
+        newDate: {type: string, format: date}
+        newTimeSlot: {$ref: '#/components/schemas/TimeSlot'}
+        message: {type: string, maxLength: 300}
+    RescheduleProposal:
+      type: object
+      required: [id, requestId, proposedBy, newDate, newTimeSlot, status, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        requestId: {type: string, format: uuid}
+        proposedBy: {type: string, enum: [CLIENT, PROFESSIONAL]}
+        newDate: {type: string, format: date}
+        newTimeSlot: {$ref: '#/components/schemas/TimeSlot'}
+        message: {type: [string, 'null']}
+        status: {type: string, enum: [PENDING, ACCEPTED, DECLINED]}
+        createdAt: {type: string, format: date-time}
+
+    # ─── Avaliações e denúncias ──────────────────────────────────────────
+    ReviewInput:
+      type: object
+      required: [rating]
+      properties:
+        rating: {type: integer, minimum: 1, maximum: 5}
+        comment: {type: string, maxLength: 1000}
+    Review:
+      type: object
+      required: [id, rating, authorName, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        rating: {type: integer, minimum: 1, maximum: 5}
+        comment: {type: [string, 'null']}
+        authorName:
+          type: string
+          description: Primeiro nome e inicial do sobrenome
+          example: Ana S.
+        serviceTitle: {type: [string, 'null']}
+        createdAt: {type: string, format: date-time}
+    ReportInput:
+      type: object
+      required: [reportedUserId, reason]
+      properties:
+        reportedUserId: {type: string, format: uuid}
+        requestId: {type: string, format: uuid}
+        reason:
+          type: string
+          enum: [NO_SHOW, BAD_SERVICE, HARASSMENT, FRAUD, FAKE_PROFILE, OTHER]
+        details: {type: string, maxLength: 1000}
+    Report:
+      type: object
+      required: [id, reporter, reported, reason, status, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        reporter: {$ref: '#/components/schemas/PartySummary'}
+        reported: {$ref: '#/components/schemas/PartySummary'}
+        requestId: {type: [string, 'null'], format: uuid}
+        reason: {type: string}
+        details: {type: [string, 'null']}
+        status: {type: string, enum: [OPEN, RESOLVED, DISMISSED]}
+        createdAt: {type: string, format: date-time}
+
+    # ─── Admin ───────────────────────────────────────────────────────────
+    AdminVerificationItem:
+      type: object
+      required: [professional, primaryCategory, status, submittedAt]
+      properties:
+        professional: {$ref: '#/components/schemas/PartySummary'}
+        primaryCategory: {$ref: '#/components/schemas/Category'}
+        city: {type: [string, 'null']}
+        status: {$ref: '#/components/schemas/VerificationStatus'}
+        submittedAt: {type: string, format: date-time}
+    AdminVerificationDetail:
+      type: object
+      required: [professional, email, documents]
+      properties:
+        professional: {$ref: '#/components/schemas/PartySummary'}
+        email: {type: string, format: email}
+        phone: {type: [string, 'null']}
+        bio: {type: [string, 'null']}
+        documents:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/VerificationDocument'
+              - type: object
+                required: [url, urlExpiresAt]
+                properties:
+                  url: {type: string, format: uri, description: URL assinada de 5 minutos}
+                  urlExpiresAt: {type: string, format: date-time}
+    AdminUserDetail:
+      type: object
+      required: [user, requestsCount, cancellationsCount, reportsReceived]
+      properties:
+        user: {$ref: '#/components/schemas/Me'}
+        verificationStatus:
+          oneOf:
+            - $ref: '#/components/schemas/VerificationStatus'
+            - type: 'null'
+        requestsCount: {type: integer}
+        cancellationsCount: {type: integer}
+        ratingAvg: {type: [number, 'null']}
+        reportsReceived:
+          type: array
+          items: {$ref: '#/components/schemas/Report'}
+    AdminRequestDetail:
+      type: object
+      required: [request, reschedules]
+      properties:
+        request: {$ref: '#/components/schemas/ServiceRequest'}
+        contract:
+          oneOf:
+            - $ref: '#/components/schemas/Contract'
+            - type: 'null'
+        reschedules:
+          type: array
+          items: {$ref: '#/components/schemas/RescheduleProposal'}
+        cancelReason: {type: [string, 'null']}
