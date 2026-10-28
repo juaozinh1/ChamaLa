@@ -13,6 +13,9 @@ export const colors = {
   warningBg: '#FFF8E1', // banner "Pendente"
   danger: '#C62828', // cancelar
   success: '#2E7D32',
+  successBg: '#E8F5E9',            // badge de sucesso
+  dangerBg: '#FDECEA',             // badge de erro/cancelado
+  overlay: 'rgba(0, 0, 0, 0.5)',   // fundo escuro do Select
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };

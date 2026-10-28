@@ -12,10 +12,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F5F0E8",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#F5EFEA",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "br.com.chamala.app"
@@ -23,9 +21,17 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-secure-store"
-    ],
+  "plugins": [
+  "expo-secure-store",
+  [
+    "expo-splash-screen",
+    {
+      "image": "./assets/splash-icon.png",
+      "backgroundColor": "#F5EFEA",
+      "imageWidth": 200
+    }
+  ]
+],
     "scheme": "chamala"
   }
 }
