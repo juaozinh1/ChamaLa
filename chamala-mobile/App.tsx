@@ -1,15 +1,17 @@
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { SessionProvider } from './src/contexts/SessionContext';
-import { RootNavigator } from './src/navigation/RootNavigator';
+import { View, Text } from 'react-native';
+import { colors, typography } from './src/theme';
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <SessionProvider>
-        <StatusBar style="dark" />
-        <RootNavigator />
-      </SessionProvider>
-    </SafeAreaProvider>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <Text style={[typography.title, { color: colors.primary }]}>ServiçoJá</Text>
+    </View>
   );
 }
