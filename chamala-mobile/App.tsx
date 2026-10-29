@@ -1,17 +1,13 @@
-import { View, Text } from 'react-native';
-import { colors, typography } from './src/theme';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ComponentShowcase } from './src/screens/ComponentShowcase';
 
+// TEMPORÁRIO: mostra a tela de teste dos componentes. Será trocado pelo RootNavigator (FRONT-04).
 export default function App() {
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: colors.background,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}
-    >
-      <Text style={[typography.title, { color: colors.primary }]}>ServiçoJá</Text>
-    </View>
+    <SafeAreaProvider>
+      <StatusBar style="dark" />
+      <ComponentShowcase />
+    </SafeAreaProvider>
   );
 }
