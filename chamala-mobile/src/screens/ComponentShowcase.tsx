@@ -80,9 +80,6 @@ export function ComponentShowcase() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Teste dos componentes</Text>
-        <Text style={styles.hint}>
-          Compare cada bloco com o print do Figma indicado. Toque nos itens para testar os estados.
-        </Text>
 
         <Section title="Boas-vindas" hint="Prints: tela de escolha de perfil">
           <Card>
