@@ -35,14 +35,14 @@ export const TelaCadastro = ({ onRegisterSuccess, onNavigateToLogin, onBack }: T
 
       <Input
         label="Nome Completo"
-        placeholder="João Silva"
+        placeholder="Seu nome"
         value={nome}
         onChangeText={setNome}
       />
 
       <Input
         label="E-mail"
-        placeholder="joao@email.com"
+        placeholder="seu@email.com"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -51,7 +51,7 @@ export const TelaCadastro = ({ onRegisterSuccess, onNavigateToLogin, onBack }: T
 
       <Input
         label="Telemóvel / Telefone"
-        placeholder="(11) 99999-9999"
+        placeholder="(81) 99999-9999"
         value={telefone}
         onChangeText={setTelefone}
         keyboardType="phone-pad"
