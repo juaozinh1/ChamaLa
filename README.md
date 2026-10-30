@@ -1,4 +1,4 @@
-# ChamaLÁ — Conectando profissionais a quem precisa
+# ServiçoJá — Conectando profissionais a quem precisa
 
 Aplicativo mobile que conecta clientes a profissionais de serviços gerais, com perfis
 verificados, busca por proximidade, avaliações e contrato padrão por pedido.
