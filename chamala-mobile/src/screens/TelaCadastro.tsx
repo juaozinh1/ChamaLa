@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, Alert, ScrollView, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, Alert, ScrollView, View, ActivityIndicator } from 'react-native';
 import { Input, Button } from '../components';
 import { colors, spacing, typography } from '../theme';
+import { api } from '../services/api';
 
 interface TelaCadastroProps {
   onRegisterSuccess: () => void;
@@ -14,14 +15,45 @@ export const TelaCadastro = ({ onRegisterSuccess, onNavigateToLogin, onBack }: T
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [senha, setSenha] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
-    if (!nome || !email || !senha) {
-      Alert.alert('Erro', 'Preencha os campos obrigatórios');
+  const handleRegister = async () => {
+    if (!nome.trim() || !email.trim() || !senha.trim()) {
+      Alert.alert('Erro', 'Preencha os campos obrigatórios (Nome, E-mail e Senha).');
       return;
     }
-    Alert.alert('Sucesso', 'Cadastro concluído com sucesso!');
-    onRegisterSuccess();
+
+    if (senha.length < 6) {
+      Alert.alert('Erro', 'A senha deve conter no mínimo 6 caracteres.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await api.post('/api/v1/auth/register', {
+        name: nome,
+        email: email.trim().toLowerCase(),
+        password: senha,
+        phone: telefone,
+        role: 'CLIENT',
+      });
+
+      Alert.alert('Sucesso', 'Conta criada com sucesso no ChamaLá!', [
+        { text: 'OK', onPress: onRegisterSuccess }
+      ]);
+
+    } catch (error: any) {
+      console.error('Erro de conexão ao cadastrar:', error);
+      
+      const errorMsg = error.response?.data?.message 
+        || error.response?.data?.error 
+        || 'Não foi possível conectar ao servidor. Verifique se o backend está rodando na porta 8085.';
+
+      Alert.alert('Falha no Cadastro', errorMsg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -34,14 +66,14 @@ export const TelaCadastro = ({ onRegisterSuccess, onNavigateToLogin, onBack }: T
       <Text style={styles.subtitle}>Preencha os seus dados para começar</Text>
 
       <Input
-        label="Nome Completo"
+        label="Nome Completo *"
         placeholder="Seu nome"
         value={nome}
         onChangeText={setNome}
       />
 
       <Input
-        label="E-mail"
+        label="E-mail *"
         placeholder="seu@email.com"
         value={email}
         onChangeText={setEmail}
@@ -58,7 +90,7 @@ export const TelaCadastro = ({ onRegisterSuccess, onNavigateToLogin, onBack }: T
       />
 
       <Input
-        label="Senha"
+        label="Senha *"
         placeholder="Mínimo de 6 dígitos"
         value={senha}
         onChangeText={setSenha}
@@ -66,7 +98,11 @@ export const TelaCadastro = ({ onRegisterSuccess, onNavigateToLogin, onBack }: T
       />
 
       <View style={styles.buttonWrapper}>
-        <Button title="Cadastrar" onPress={handleRegister} />
+        {loading ? (
+          <ActivityIndicator size="large" color={colors.primary} />
+        ) : (
+          <Button title="Cadastrar" onPress={handleRegister} />
+        )}
       </View>
 
       <TouchableOpacity onPress={onNavigateToLogin} style={styles.linkButton}>
@@ -78,41 +114,37 @@ export const TelaCadastro = ({ onRegisterSuccess, onNavigateToLogin, onBack }: T
 
 const styles = StyleSheet.create({
   container: {
+    padding: spacing.medium || 16,
     flexGrow: 1,
-    padding: spacing.lg,
-    backgroundColor: colors.background,
-    paddingTop: spacing.xxl,
-    paddingBottom: spacing.xxl,
+    justifyContent: 'center',
   },
   backButton: {
-    marginBottom: spacing.lg,
-    alignSelf: 'flex-start',
+    marginBottom: spacing.medium || 16,
   },
   backButtonText: {
     color: colors.primary,
-    ...typography.body,
+    fontSize: 14,
   },
   title: {
-    ...typography.title,
-    color: colors.primary,
-    textAlign: 'center',
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text || '#000',
+    marginBottom: 8,
   },
   subtitle: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-    marginBottom: spacing.xl,
+    fontSize: 14,
+    color: '#666',
+    marginBottom: spacing.medium || 16,
   },
   buttonWrapper: {
-    marginTop: spacing.md,
+    marginTop: spacing.medium || 16,
   },
   linkButton: {
-    marginTop: spacing.lg,
+    marginTop: spacing.medium || 16,
     alignItems: 'center',
   },
   linkText: {
     color: colors.primary,
-    ...typography.caption,
+    fontSize: 14,
   },
 });

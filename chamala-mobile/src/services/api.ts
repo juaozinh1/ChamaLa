@@ -1,10 +1,11 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-// Para Web: localhost. Para Celular Físico/Expo Go: use o IP da sua máquina na rede (ex: http://192.168.1.15:8080)
-const BASE_URL = Platform.OS === 'web' 
-  ? 'http://localhost:8080' 
-  : 'http://192.168.1.15:8080'; 
+// Se estiver rodando no navegador do PC, usa localhost na porta 8085
+// Se for emulador Android, usa 10.0.2.2 na porta 8085
+const BASE_URL = Platform.OS === 'web'
+  ? 'http://localhost:8085'
+  : 'http://10.0.2.2:8085';
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -12,4 +13,4 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-});
+}); 

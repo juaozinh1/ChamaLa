@@ -17,29 +17,45 @@ export const TelaLogin = ({ onLoginSuccess, onNavigateToRegister, onBack }: Tela
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !senha) {
-      Alert.alert('Erro', 'Preencha todos os campos');
+    if (!email.trim() || !senha.trim()) {
+      Alert.alert('Erro', 'Preencha todos os campos.');
       return;
     }
 
     try {
       setLoading(true);
-      // Chamada real ao backend conectado ao PostgreSQL
-      const response = await api.post('/auth/login', { email, senha });
 
-      const { token, usuario } = response.data;
+      // Rota correta alinhada com o @RequestMapping("/api/v1/auth") do backend
+      // Enviando 'password' em vez de 'senha' para o LoginRequest Java
+      const response = await api.post('/api/v1/auth/login', {
+        email: email.trim().toLowerCase(),
+        password: senha,
+      });
 
-      // 1. Salva o token e dados localmente no dispositivo
+      const data = response.data;
+      const token = data.token || 'temp-token';
+      const roleVindaDoBanco = (data.usuario?.role || data.role || 'CLIENT').toUpperCase();
+
+      // Normaliza para o tipo exigido pela interface ('CLIENTE' | 'PROFISSIONAL')
+      const normalizedRole: 'CLIENTE' | 'PROFISSIONAL' =
+        roleVindaDoBanco.includes('PROF') ? 'PROFISSIONAL' : 'CLIENTE';
+
+      // 1. Salva dados localmente no dispositivo
       await AsyncStorage.setItem('@chamala:token', token);
-      await AsyncStorage.setItem('@chamala:user', JSON.stringify(usuario));
+      await AsyncStorage.setItem('@chamala:user', JSON.stringify(data.usuario || data));
 
-      // 2. Configura o token para as próximas requisições
+      // 2. Configura o header das próximas requisições
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-      // 3. Notifica o App.tsx com o tipo de usuário que veio do banco
-      onLoginSuccess(usuario.role);
+      // 3. Notifica a navegação principal
+      onLoginSuccess(normalizedRole);
+
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Falha ao autenticar. Verifique seus dados.';
+      console.error('Erro de login:', error);
+      const msg =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Falha ao autenticar. Verifique o seu e-mail e senha.';
       Alert.alert('Erro no Login', msg);
     } finally {
       setLoading(false);

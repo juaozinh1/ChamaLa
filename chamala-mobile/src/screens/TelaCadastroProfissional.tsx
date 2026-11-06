@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, Alert, ScrollView, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, Alert, ScrollView, View, ActivityIndicator } from 'react-native';
 import { Input, Button, TextArea } from '../components';
 import { colors, spacing, typography } from '../theme';
+import { api } from '../services/api';
 
 interface TelaCadastroProfissionalProps {
   onRegisterSuccess: () => void;
@@ -21,15 +22,42 @@ export const TelaCadastroProfissional = ({
   const [categoria, setCategoria] = useState('');
   const [descricao, setDescricao] = useState('');
   const [senha, setSenha] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
-    if (!nome || !email || !cpfCnpj || !telefone || !categoria || !senha) {
-      Alert.alert('Atenção', 'Por favor, preencha todos os campos obrigatórios.');
+  const handleRegister = async () => {
+    if (!nome.trim() || !email.trim() || !senha.trim() || !telefone.trim()) {
+      Alert.alert('Atenção', 'Por favor, preencha os campos obrigatórios (Nome, E-mail, Telefone e Senha).');
       return;
     }
 
-    Alert.alert('Sucesso', 'Perfil profissional cadastrado com sucesso!');
-    onRegisterSuccess();
+    if (senha.length < 6) {
+      Alert.alert('Atenção', 'A senha deve conter no mínimo 6 caracteres.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await api.post('/api/v1/auth/register', {
+        name: nome,
+        email: email.trim().toLowerCase(),
+        password: senha,
+        phone: telefone,
+        role: 'PROFESSIONAL',
+      });
+
+      Alert.alert('Sucesso', 'Perfil profissional criado com sucesso!', [
+        { text: 'Ir para o Login', onPress: onRegisterSuccess }
+      ]);
+    } catch (error: any) {
+      console.error('Erro ao cadastrar profissional:', error);
+      const msg = error.response?.data?.message 
+        || error.response?.data?.error 
+        || 'Falha ao registrar profissional no servidor.';
+      Alert.alert('Erro no Cadastro', msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -44,14 +72,14 @@ export const TelaCadastroProfissional = ({
       </Text>
 
       <Input
-        label="Nome Completo / Razão Social"
+        label="Nome Completo / Razão Social *"
         placeholder="Ex: Carlos Silva ou CS Reformas"
         value={nome}
         onChangeText={setNome}
       />
 
       <Input
-        label="E-mail"
+        label="E-mail *"
         placeholder="carlos@exemplo.com"
         value={email}
         onChangeText={setEmail}
@@ -68,8 +96,8 @@ export const TelaCadastroProfissional = ({
       />
 
       <Input
-        label="Telemóvel / WhatsApp"
-        placeholder="(11) 99999-9999"
+        label="Telemóvel / WhatsApp *"
+        placeholder="(81) 99999-9999"
         value={telefone}
         onChangeText={setTelefone}
         keyboardType="phone-pad"
@@ -90,7 +118,7 @@ export const TelaCadastroProfissional = ({
       />
 
       <Input
-        label="Senha de Acesso"
+        label="Senha de Acesso *"
         placeholder="Mínimo de 6 caracteres"
         value={senha}
         onChangeText={setSenha}
@@ -98,7 +126,11 @@ export const TelaCadastroProfissional = ({
       />
 
       <View style={styles.buttonWrapper}>
-        <Button title="Criar Perfil Profissional" onPress={handleRegister} />
+        {loading ? (
+          <ActivityIndicator size="large" color={colors.primary} />
+        ) : (
+          <Button title="Criar Perfil Profissional" onPress={handleRegister} />
+        )}
       </View>
 
       <TouchableOpacity onPress={onNavigateToLogin} style={styles.linkButton}>

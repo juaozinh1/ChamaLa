@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Button, Card, SearchInput } from '../components';
 import { colors, spacing, typography } from '../theme';
+import { api } from '../services/api';
+
+interface Categoria {
+  id: number | string;
+  name: string;
+}
 
 interface TelaHomeProps {
   isLoggedIn: boolean;
@@ -19,24 +25,20 @@ export const TelaHome = ({
   onNavigateToPro,
 }: TelaHomeProps) => {
   const [busca, setBusca] = useState('');
-  const [categorias, setCategorias] = useState<any[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Só busca categorias se o usuário estiver autenticado
   useEffect(() => {
     if (!isLoggedIn) return;
 
     const carregarCategorias = async () => {
       try {
         setLoading(true);
-        setCategorias([
-          { id: 1, name: 'Eletricista' },
-          { id: 2, name: 'Encanador' },
-          { id: 3, name: 'Pintor' },
-          { id: 4, name: 'Limpeza' },
-        ]);
+        // Integração real com o CategoryController do Spring Boot
+        const response = await api.get('/api/v1/categories');
+        setCategorias(response.data);
       } catch (err) {
-        console.error(err);
+        console.error('Erro ao carregar categorias do backend:', err);
       } finally {
         setLoading(false);
       }
@@ -46,7 +48,7 @@ export const TelaHome = ({
   }, [isLoggedIn]);
 
   // ==========================================
-  // ESTADO 1: USUÁRIO DESLOGADO (VISITANTE)
+  // ESTADO 1: VISITANTE (DESLOGADO)
   // ==========================================
   if (!isLoggedIn) {
     return (
@@ -83,10 +85,10 @@ export const TelaHome = ({
   }
 
   // ==========================================
-  // ESTADO 2: USUÁRIO LOGADO
+  // ESTADO 2: USUÁRIO AUTENTICADO
   // ==========================================
   const categoriasFiltradas = categorias.filter((c) =>
-    c.name.toLowerCase().includes(busca.toLowerCase())
+    c.name?.toLowerCase().includes(busca.toLowerCase())
   );
 
   return (
@@ -105,7 +107,7 @@ export const TelaHome = ({
       <Text style={styles.sectionTitle}>Categorias Disponíveis</Text>
 
       {loading ? (
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: spacing.md }} />
       ) : (
         <FlatList
           data={categoriasFiltradas}
@@ -125,7 +127,6 @@ export const TelaHome = ({
 };
 
 const styles = StyleSheet.create({
-  // Estilos para visitante (deslogado)
   guestContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -152,8 +153,6 @@ const styles = StyleSheet.create({
   spacingSm: {
     height: spacing.sm,
   },
-
-  // Estilos para usuário logado
   container: {
     flex: 1,
     padding: spacing.md,
@@ -190,8 +189,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.md,
   },
-
-  // Banner profissional
   proBanner: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
