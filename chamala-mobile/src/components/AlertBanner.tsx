@@ -1,74 +1,86 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Button } from './Button';
-import { colors, radius, spacing, typography } from '../theme';
+import { View, Text, StyleSheet } from 'react-native';
+import { colors, spacing, radius, typography } from '../theme';
 
-type AlertBannerProps = {
-  /** 'info' (azul): avisos. 'warning' (amarelo): "Verificação pendente". */
-  variant?: 'info' | 'warning';
-  title?: string;
+export type AlertVariant = 'info' | 'warning' | 'error' | 'success';
+
+export interface AlertBannerProps {
   message: string;
-  /** Botão opcional à direita (ex.: "Verificar"). */
-  actionLabel?: string;
-  onAction?: () => void;
-};
+  variant?: AlertVariant;
+}
 
-// Bordas dos banners no Figma.
-const INFO_BORDER = '#BFD3E6';
-const WARNING_BORDER = '#E6D58A';
+export const AlertBanner = ({ message, variant = 'info' }: AlertBannerProps) => {
+  const getVariantStyles = () => {
+    switch (variant) {
+      case 'error':
+        return {
+          container: styles.errorContainer,
+          text: styles.errorText,
+        };
+      case 'warning':
+        return {
+          container: styles.warningContainer,
+          text: styles.warningText,
+        };
+      case 'success':
+        return {
+          container: styles.successContainer,
+          text: styles.successText,
+        };
+      case 'info':
+      default:
+        return {
+          container: styles.infoContainer,
+          text: styles.infoText,
+        };
+    }
+  };
 
-export function AlertBanner({
-  variant = 'info',
-  title,
-  message,
-  actionLabel,
-  onAction,
-}: AlertBannerProps) {
-  const warning = variant === 'warning';
+  const currentStyle = getVariantStyles();
 
   return (
-    <View
-      accessibilityRole="alert"
-      style={[styles.container, warning ? styles.warning : styles.info]}
-    >
-      <Ionicons
-        name={warning ? 'star-outline' : 'alert-circle-outline'}
-        size={22}
-        color={warning ? colors.gold : colors.text}
-        style={styles.icon}
-      />
-      <View style={styles.body}>
-        {title ? <Text style={styles.title}>{title}</Text> : null}
-        <Text style={styles.message}>{message}</Text>
-      </View>
-      {actionLabel && onAction ? (
-        <Button
-          title={actionLabel}
-          variant="gold"
-          size="sm"
-          fullWidth={false}
-          onPress={onAction}
-          style={styles.action}
-        />
-      ) : null}
+    <View style={[styles.container, currentStyle.container]}>
+      <Text style={[styles.message, currentStyle.text]}>{message}</Text>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: spacing.lg,
-    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
     borderWidth: 1,
   },
-  info: { backgroundColor: colors.infoBg, borderColor: INFO_BORDER },
-  warning: { backgroundColor: colors.warningBg, borderColor: WARNING_BORDER },
-  icon: { marginRight: spacing.md, marginTop: 1 },
-  body: { flex: 1 },
-  title: { ...typography.body, fontWeight: '700', color: colors.gold },
-  message: { ...typography.body, color: colors.textMuted },
-  action: { marginLeft: spacing.md },
+  message: {
+    ...typography.caption,
+    fontWeight: '500',
+  },
+  infoContainer: {
+    backgroundColor: colors.infoBg,
+    borderColor: colors.border,
+  },
+  infoText: {
+    color: colors.text,
+  },
+  warningContainer: {
+    backgroundColor: colors.warningBg,
+    borderColor: colors.gold,
+  },
+  warningText: {
+    color: colors.text,
+  },
+  errorContainer: {
+    backgroundColor: colors.dangerBg,
+    borderColor: colors.danger,
+  },
+  errorText: {
+    color: colors.danger,
+  },
+  successContainer: {
+    backgroundColor: colors.successBg,
+    borderColor: colors.success,
+  },
+  successText: {
+    color: colors.success,
+  },
 });

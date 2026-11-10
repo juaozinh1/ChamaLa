@@ -1,21 +1,17 @@
 package br.com.chamala.auth;
 
-import java.util.Map;
-import java.util.Optional;
-
+import br.com.chamala.user.User;
+import br.com.chamala.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import br.com.chamala.user.User;
-import br.com.chamala.user.UserRepository;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@CrossOrigin(origins = "*")
 public class AuthController {
 
     private final UserRepository userRepository;
@@ -26,56 +22,57 @@ public class AuthController {
         this.passwordEncoder = passwordEncoder;
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
-        if (request.email() == null || request.email().isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("message", "O e-mail é obrigatório."));
-        }
-
-        if (userRepository.existsByEmail(request.email())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("message", "E-mail já cadastrado."));
-        }
-
-        User user = new User();
-        user.setName(request.name());
-        user.setEmail(request.email());
-        user.setPassword(passwordEncoder.encode(request.password()));
-        user.setPhone(request.phone());
-        user.setRole(request.role() != null ? request.role() : "CLIENT");
-
-        userRepository.save(user);
-
-        return ResponseEntity.status(HttpStatus.CREATED)
-            .body(Map.of("message", "Usuário cadastrado com sucesso!"));
-    }
-
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-        Optional<User> userOptional = userRepository.findByEmail(request.email());
+        try {
+            System.out.println("\n========== [DEBUG LOGIN] ==========");
+            System.out.println("1. Dados recebidos -> Email: [" + request.email() + "] | Senha: [" + request.password() + "]");
 
-        if (userOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("message", "E-mail ou senha inválidos."));
+            if (request.email() == null || request.password() == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("message", "E-mail e senha são obrigatórios."));
+            }
+
+            String emailBusca = request.email().trim().toLowerCase();
+            var userOpt = userRepository.findByEmail(emailBusca);
+
+            if (userOpt.isEmpty()) {
+                System.out.println("❌ 2. Usuário não encontrado para: " + emailBusca);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("message", "E-mail ou senha incorretos."));
+            }
+
+            User user = userOpt.get();
+            System.out.println("✅ 2. Usuário localizado: " + user.getName() + " | ID: " + user.getId());
+            System.out.println("3. Senha gravada no banco: " + user.getPassword());
+
+            boolean match = passwordEncoder.matches(request.password().trim(), user.getPassword());
+            System.out.println("4. BCrypt match: " + match);
+
+            if (!match) {
+                System.out.println("❌ 5. Senha informada não confere!");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("message", "E-mail ou senha incorretos."));
+            }
+
+            String roleStr = (user.getRole() != null) ? String.valueOf(user.getRole()) : "CLIENT";
+
+            System.out.println("✅ 6. Login efetuado com sucesso! Role: " + roleStr);
+            System.out.println("===================================\n");
+
+            return ResponseEntity.ok(new LoginResponse(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                roleStr,
+                null
+            ));
+
+        } catch (Exception e) {
+            System.err.println("🔥 [EXCEÇÃO NO AUTH CONTROLLER]: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Erro interno no servidor: " + e.getMessage()));
         }
-
-        User user = userOptional.get();
-
-        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("message", "E-mail ou senha inválidos."));
-        }
-
-        return ResponseEntity.ok(Map.of(
-            "message", "Login realizado com sucesso!",
-            "token", "dummy-jwt-token",
-            "usuario", Map.of(
-                "id", user.getId(),
-                "name", user.getName(),
-                "email", user.getEmail(),
-                "role", user.getRole()
-            )
-        ));
     }
 }

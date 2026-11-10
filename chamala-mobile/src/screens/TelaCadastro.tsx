@@ -1,150 +1,87 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, Alert, ScrollView, View, ActivityIndicator } from 'react-native';
-import { Input, Button } from '../components';
-import { colors, spacing, typography } from '../theme';
-import { api } from '../services/api';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { globalStyles } from '../styles/globalStyles';
+import { Input, Button, AlertBanner } from '../components';
 
 interface TelaCadastroProps {
   onRegisterSuccess: () => void;
   onNavigateToLogin: () => void;
-  onBack: () => void;
+  onNavigateToProfissionalRegister: () => void;
 }
 
-export const TelaCadastro = ({ onRegisterSuccess, onNavigateToLogin, onBack }: TelaCadastroProps) => {
-  const [nome, setNome] = useState('');
+export const TelaCadastro = ({
+  onRegisterSuccess,
+  onNavigateToLogin,
+  onNavigateToProfissionalRegister,
+}: TelaCadastroProps) => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [telefone, setTelefone] = useState('');
-  const [senha, setSenha] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!nome.trim() || !email.trim() || !senha.trim()) {
-      Alert.alert('Erro', 'Preencha os campos obrigatórios (Nome, E-mail e Senha).');
+    if (!name || !email || !password) {
+      setErrorMessage('Por favor, preencha os campos obrigatórios.');
       return;
     }
-
-    if (senha.length < 6) {
-      Alert.alert('Erro', 'A senha deve conter no mínimo 6 caracteres.');
-      return;
-    }
+    setErrorMessage('');
+    setIsLoading(true);
 
     try {
-      setLoading(true);
-
-      const response = await api.post('/api/v1/auth/register', {
-        name: nome,
-        email: email.trim().toLowerCase(),
-        password: senha,
-        phone: telefone,
-        role: 'CLIENT',
-      });
-
-      Alert.alert('Sucesso', 'Conta criada com sucesso no ChamaLá!', [
-        { text: 'OK', onPress: onRegisterSuccess }
-      ]);
-
-    } catch (error: any) {
-      console.error('Erro de conexão ao cadastrar:', error);
-      
-      const errorMsg = error.response?.data?.message 
-        || error.response?.data?.error 
-        || 'Não foi possível conectar ao servidor. Verifique se o backend está rodando na porta 8085.';
-
-      Alert.alert('Falha no Cadastro', errorMsg);
+      onRegisterSuccess();
+    } catch {
+      setErrorMessage('Não foi possível realizar o cadastro.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <TouchableOpacity onPress={onBack} style={styles.backButton}>
-        <Text style={styles.backButtonText}>← Voltar para o início</Text>
-      </TouchableOpacity>
+    <View style={globalStyles.screenContainer}>
+      <ScrollView contentContainerStyle={globalStyles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={globalStyles.headerLeftBlock}>
+          <Text style={globalStyles.titleLeft}>Criar Conta</Text>
+          <Text style={globalStyles.subtitleLeft}>Cadastre-se para solicitar serviços residenciais</Text>
+        </View>
 
-      <Text style={styles.title}>Criar Conta</Text>
-      <Text style={styles.subtitle}>Preencha os seus dados para começar</Text>
-
-      <Input
-        label="Nome Completo *"
-        placeholder="Seu nome"
-        value={nome}
-        onChangeText={setNome}
-      />
-
-      <Input
-        label="E-mail *"
-        placeholder="seu@email.com"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-
-      <Input
-        label="Telemóvel / Telefone"
-        placeholder="(81) 99999-9999"
-        value={telefone}
-        onChangeText={setTelefone}
-        keyboardType="phone-pad"
-      />
-
-      <Input
-        label="Senha *"
-        placeholder="Mínimo de 6 dígitos"
-        value={senha}
-        onChangeText={setSenha}
-        secureTextEntry
-      />
-
-      <View style={styles.buttonWrapper}>
-        {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} />
-        ) : (
-          <Button title="Cadastrar" onPress={handleRegister} />
+        {!!errorMessage && (
+          <View style={{ marginBottom: 16 }}>
+            <AlertBanner variant="error" message={errorMessage} />
+          </View>
         )}
-      </View>
 
-      <TouchableOpacity onPress={onNavigateToLogin} style={styles.linkButton}>
-        <Text style={styles.linkText}>Já tem uma conta? Inicie sessão</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <View style={globalStyles.formSection}>
+          <Input label="Nome Completo *" placeholder="Ex: João Silva" value={name} onChangeText={setName} />
+          <Input
+            label="E-mail *"
+            placeholder="seu@email.com"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <Input label="Telefone" placeholder="(81) 99999-9999" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+          <Input label="Senha *" placeholder="Mínimo 6 caracteres" value={password} onChangeText={setPassword} secureTextEntry />
+        </View>
+
+        <View style={globalStyles.formActions}>
+          <Button title="Criar Conta de Cliente" onPress={handleRegister} loading={isLoading} />
+          <Button
+            title="Quero prestar serviços (Profissional)"
+            variant="outline"
+            onPress={onNavigateToProfissionalRegister}
+          />
+        </View>
+
+        <View style={globalStyles.footerNav}>
+          <Text style={globalStyles.footerText}>Já tem uma conta?</Text>
+          <TouchableOpacity onPress={onNavigateToLogin}>
+            <Text style={globalStyles.footerLink}>Fazer login</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    padding: spacing.medium || 16,
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  backButton: {
-    marginBottom: spacing.medium || 16,
-  },
-  backButtonText: {
-    color: colors.primary,
-    fontSize: 14,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text || '#000',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: spacing.medium || 16,
-  },
-  buttonWrapper: {
-    marginTop: spacing.medium || 16,
-  },
-  linkButton: {
-    marginTop: spacing.medium || 16,
-    alignItems: 'center',
-  },
-  linkText: {
-    color: colors.primary,
-    fontSize: 14,
-  },
-});

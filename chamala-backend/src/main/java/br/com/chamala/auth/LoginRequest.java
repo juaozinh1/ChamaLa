@@ -1,6 +1,8 @@
 package br.com.chamala.auth;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public record LoginRequest(
-    String email,
-    String password
+    @JsonProperty("email") String email,
+    @JsonProperty("password") String password
 ) {}

@@ -1,315 +1,164 @@
-import React, { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  Text,
-  FlatList,
-  Switch,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
-import { Button, Card } from '../components';
-import { colors, spacing, typography } from '../theme';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, Image, TouchableOpacity, Linking, Platform } from 'react-native';
+import { globalStyles } from '../styles/globalStyles';
+import { Button, AlertBanner } from '../components';
+import { api } from '../services/api';
 
-interface Chamado {
+interface OrderItem {
   id: string;
-  cliente: string;
-  servico: string;
-  endereco: string;
-  horario: string;
-  valorEstimado: string;
+  title: string;
+  description: string;
+  clientName: string;
+  categoryName: string;
+  addressReference?: string;
+  distanceKm: number;
+  latitude: number;
+  longitude: number;
 }
 
-interface TelaHomeProfissionalProps {
-  onLogout: () => void;
-  onNavigateToPerfil?: () => void;
-}
+export const TelaHomeProfissional = () => {
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
-export const TelaHomeProfissional = ({
-  onLogout,
-  onNavigateToPerfil,
-}: TelaHomeProfissionalProps) => {
-  const [isDisponivel, setIsDisponivel] = useState(true);
-  const [chamados, setChamados] = useState<Chamado[]>([
-    {
-      id: '1',
-      cliente: 'Mariana Souza',
-      servico: 'Instalação de Tomada e Disjuntor',
-      endereco: 'Rua das Flores, 120 - Centro',
-      horario: 'Hoje às 15:30',
-      valorEstimado: 'R$ 150,00',
-    },
-    {
-      id: '2',
-      cliente: 'Lucas Ferreira',
-      servico: 'Troca de Chuveiro Elétrico',
-      endereco: 'Av. Brasil, 450, Apto 32',
-      horario: 'Amanhã às 10:00',
-      valorEstimado: 'R$ 120,00',
-    },
-  ]);
+  // Coordenadas base do profissional (Recife)
+  const profLat = -8.0578;
+  const profLon = -34.8829;
 
-  const handleAceitar = (id: string) => {
-    Alert.alert('Chamado Aceito', 'O cliente será notificado da sua confirmação.');
-    setChamados((prev) => prev.filter((item) => item.id !== id));
+  const fetchNearbyOrders = async () => {
+    try {
+      setError('');
+      const response = await api.get('/api/v1/orders/nearby', {
+        params: {
+          lat: profLat,
+          lon: profLon,
+          closestFirst: true,
+        },
+      });
+      setOrders(response.data || []);
+    } catch (err: any) {
+      setError('Não foi possível carregar os pedidos próximos.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const handleRecusar = (id: string) => {
-    Alert.alert('Chamado Recusado', 'O pedido foi retirado da sua lista.');
-    setChamados((prev) => prev.filter((item) => item.id !== id));
+  useEffect(() => {
+    fetchNearbyOrders();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchNearbyOrders();
+  };
+
+  const handleOpenMaps = (lat: number, lon: number) => {
+    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+    Linking.openURL(url);
   };
 
   return (
-    <View style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Olá, Profissional 👋</Text>
-          <Text style={styles.subtitle}>Painel de Atendimentos</Text>
+    <View style={globalStyles.screenContainer}>
+      <ScrollView
+        contentContainerStyle={globalStyles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View style={globalStyles.headerLeftBlock}>
+          <Text style={globalStyles.titleLeft}>Painel do Profissional 🛠️</Text>
+          <Text style={globalStyles.subtitleLeft}>Chamados disponíveis na sua região</Text>
         </View>
-        <Button title="Sair" onPress={onLogout} variant="outline" size="sm" />
-      </View>
 
-      {/* Switch de Disponibilidade */}
-      <View style={[styles.statusCard, isDisponivel ? styles.statusOnline : styles.statusOffline]}>
-        <View style={styles.statusInfo}>
-          <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: isDisponivel ? '#10B981' : '#6B7280' },
-            ]}
-          />
-          <Text style={styles.statusText}>
-            {isDisponivel ? 'Disponível para novos chamados' : 'Pausado (Invisível para clientes)'}
-          </Text>
-        </View>
-        <Switch
-          value={isDisponivel}
-          onValueChange={setIsDisponivel}
-          trackColor={{ false: '#D1D5DB', true: colors.primary }}
-          thumbColor="#FFFFFF"
-        />
-      </View>
+        {error ? (
+          <View style={{ marginBottom: 16 }}>
+            <AlertBanner message={error} variant="error" />
+          </View>
+        ) : null}
 
-      {/* Métricas Rápidas */}
-      <View style={styles.metricsRow}>
-        <Card style={styles.metricCard}>
-          <Text style={styles.metricNumber}>{chamados.length}</Text>
-          <Text style={styles.metricLabel}>Pendentes</Text>
-        </Card>
-        <Card style={styles.metricCard}>
-          <Text style={styles.metricNumber}>12</Text>
-          <Text style={styles.metricLabel}>Realizados</Text>
-        </Card>
-        <Card style={styles.metricCard}>
-          <Text style={styles.metricNumber}>R$ 1.480</Text>
-          <Text style={styles.metricLabel}>Este mês</Text>
-        </Card>
-      </View>
-
-      <Text style={styles.sectionTitle}>Chamados Recebidos</Text>
-
-      {/* Lista de Pedidos */}
-      <FlatList
-        data={chamados}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Card style={styles.chamadoCard}>
-            <View style={styles.chamadoHeader}>
-              <Text style={styles.clienteName}>{item.cliente}</Text>
-              <Text style={styles.valorBadge}>{item.valorEstimado}</Text>
-            </View>
-
-            <Text style={styles.servicoText}>{item.servico}</Text>
-            <Text style={styles.detailText}>📍 {item.endereco}</Text>
-            <Text style={styles.detailText}>⏰ {item.horario}</Text>
-
-            <View style={styles.chamadoActions}>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.recusarBtn]}
-                onPress={() => handleRecusar(item.id)}
-              >
-                <Text style={styles.recusarBtnText}>Recusar</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.aceitarBtn]}
-                onPress={() => handleAceitar(item.id)}
-              >
-                <Text style={styles.aceitarBtnText}>Aceitar Chamado</Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
-        )}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Nenhum chamado pendente no momento.</Text>
-            <Text style={styles.emptySubtext}>
-              Mantenha o status "Disponível" para receber novos pedidos na sua região.
+        {loading ? (
+          <ActivityIndicator size="large" color="#0284c7" style={{ marginTop: 32 }} />
+        ) : orders.length === 0 ? (
+          <View style={[globalStyles.cardBox, { alignItems: 'center', paddingVertical: 32 }]}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>📭</Text>
+            <Text style={globalStyles.sectionTitle}>Nenhum pedido no momento</Text>
+            <Text style={[globalStyles.subtitleLeft, { textAlign: 'center', marginTop: 4 }]}>
+              Puxe para baixo para atualizar a lista.
             </Text>
           </View>
-        }
-      />
+        ) : (
+          <View style={globalStyles.formSection}>
+            {orders.map((order) => {
+              const lat = Number(order.latitude);
+              const lon = Number(order.longitude);
+              const hasCoords = !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
+
+              // Imagem estática do mapa via OpenStreetMap (funciona em qualquer navegador sem chave de API)
+              const staticMapUrl = hasCoords
+                ? `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=15&size=500x200&maptype=mapnik&markers=${lat},${lon},ol-marker`
+                : '';
+
+              return (
+                <View key={order.id} style={globalStyles.cardBox}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[globalStyles.sectionTitle, { flex: 1 }]}>{order.title}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7' }}>
+                      {order.distanceKm != null ? `${Number(order.distanceKm).toFixed(1)} km` : 'Próximo'}
+                    </Text>
+                  </View>
+
+                  <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                    Cliente: {order.clientName} • {order.categoryName}
+                  </Text>
+
+                  <Text style={{ fontSize: 14, color: '#334155', marginVertical: 8 }}>
+                    {order.description}
+                  </Text>
+
+                  {order.addressReference ? (
+                    <Text style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
+                      Ref: {order.addressReference}
+                    </Text>
+                  ) : null}
+
+                  {/* Visualização do Mapa */}
+                  {hasCoords ? (
+                    <View style={{ width: '100%', height: 160, borderRadius: 8, overflow: 'hidden', marginVertical: 10, position: 'relative', backgroundColor: '#e2e8f0' }}>
+                      <Image
+                        source={{ uri: staticMapUrl }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                      />
+                      <TouchableOpacity
+                        style={{
+                          position: 'absolute',
+                          bottom: 8,
+                          right: 8,
+                          backgroundColor: '#0284c7',
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 6,
+                        }}
+                        onPress={() => handleOpenMaps(lat, lon)}
+                      >
+                        <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: 'bold' }}>
+                          Abrir no Google Maps ↗
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginVertical: 6 }}>
+                      Localização no mapa não disponível
+                    </Text>
+                  )}
+
+                  <Button title="Aceitar Chamado" onPress={() => {}} />
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: spacing.md,
-    backgroundColor: colors.background,
-    paddingTop: spacing.xxl,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  greeting: {
-    ...typography.subtitle,
-    color: colors.text,
-    fontSize: 18,
-  },
-  subtitle: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  statusCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: spacing.md,
-  },
-  statusOnline: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-  },
-  statusOffline: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-  },
-  statusInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: spacing.xs,
-  },
-  statusText: {
-    ...typography.caption,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  metricCard: {
-    flex: 1,
-    padding: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metricNumber: {
-    ...typography.subtitle,
-    color: colors.primary,
-    fontSize: 16,
-  },
-  metricLabel: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  sectionTitle: {
-    ...typography.subtitle,
-    color: colors.text,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  chamadoCard: {
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  chamadoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  clienteName: {
-    ...typography.subtitle,
-    color: colors.text,
-    fontSize: 16,
-  },
-  valorBadge: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  servicoText: {
-    ...typography.body,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  detailText: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginBottom: 2,
-  },
-  chamadoActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recusarBtn: {
-    backgroundColor: '#FEE2E2',
-  },
-  recusarBtnText: {
-    ...typography.caption,
-    color: '#EF4444',
-    fontWeight: '600',
-  },
-  aceitarBtn: {
-    backgroundColor: colors.primary,
-  },
-  aceitarBtnText: {
-    ...typography.caption,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.md,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  emptySubtext: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-  },
-});
