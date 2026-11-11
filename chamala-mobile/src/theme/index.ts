@@ -20,7 +20,14 @@ export const colors = {
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
-export const radius = { sm: 8, md: 12, lg: 16, pill: 999 };
+export const radius = {
+  none: 0,
+  xs: 0,
+  sm: 0,
+  md: 0,
+  lg: 0,
+  full: 0,
+} as const;
 
 export const typography = {
   title: { fontSize: 24, fontWeight: '700' as const },

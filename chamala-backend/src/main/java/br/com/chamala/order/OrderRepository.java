@@ -35,7 +35,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
         INNER JOIN categories c ON c.id = o.category_id
         INNER JOIN users u ON u.id = o.client_id
         WHERE o.status = 'OPEN'
-          AND (:categoryId IS NULL OR o.category_id = :categoryId)
+          AND (cast(:categoryId as bigint) IS NULL OR o.category_id = cast(:categoryId as bigint))
         ORDER BY 
           CASE WHEN :closestFirst = true THEN 
                (6371 * acos(least(1.0, greatest(-1.0, cos(radians(:profLat)) * cos(radians(o.latitude)) * cos(radians(o.longitude) - radians(:profLon)) + sin(radians(:profLat)) * sin(radians(o.latitude)))))) 
@@ -51,4 +51,6 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
         @Param("categoryId") Long categoryId,
         @Param("closestFirst") boolean closestFirst
     );
+
+    List<Order> findByClientIdOrderByCreatedAtDesc(UUID clientId);
 }

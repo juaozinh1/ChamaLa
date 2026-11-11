@@ -8,10 +8,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/orders")
+@CrossOrigin(origins = "*")
 public class OrderController {
 
     private final OrderService orderService;
@@ -21,22 +23,35 @@ public class OrderController {
     }
 
     @PostMapping
-    public ResponseEntity<OrderResponse> createOrder(
-            @RequestParam UUID clientId,
-            @RequestBody @Valid OrderCreateRequest request
-    ) {
-        OrderResponse response = orderService.createOrder(clientId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<OrderResponse> createOrder(@RequestBody @Valid OrderCreateRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(orderService.createOrder(request.clientId(), request));
     }
 
-   @GetMapping("/nearby")
-public ResponseEntity<List<OrderResponse>> getNearbyOrders(
-        @RequestParam(name = "lat") double lat,
-        @RequestParam(name = "lon") double lon,
-        @RequestParam(name = "categoryId", required = false) Long categoryId, // <-- Deve ser Long, não UUID
-        @RequestParam(name = "closestFirst", defaultValue = "true") boolean closestFirst
-) {
-    List<OrderResponse> orders = orderService.getNearbyOrders(lat, lon, categoryId, closestFirst);
-    return ResponseEntity.ok(orders);
-}
+    @GetMapping("/nearby")
+    public ResponseEntity<List<OrderResponse>> getNearbyOrders(
+            @RequestParam double lat,
+            @RequestParam double lon,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(defaultValue = "true") boolean closestFirst) {
+        return ResponseEntity.ok(orderService.getNearbyOrders(lat, lon, categoryId, closestFirst));
+    }
+
+    @GetMapping("/client")
+    public ResponseEntity<List<OrderResponse>> getOrdersByClient(@RequestParam UUID clientId) {
+        return ResponseEntity.ok(orderService.getOrdersByClient(clientId));
+    }
+
+    @PostMapping("/{orderId}/accept")
+    public ResponseEntity<?> acceptOrder(
+            @PathVariable UUID orderId,
+            @RequestBody Map<String, String> body) {
+        String professionalIdStr = body.get("professionalId");
+        if (professionalIdStr == null || professionalIdStr.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "O ID do profissional é obrigatório."));
+        }
+
+        orderService.acceptOrder(orderId, UUID.fromString(professionalIdStr));
+        return ResponseEntity.ok(Map.of("message", "Pedido aceito com sucesso!"));
+    }
 }

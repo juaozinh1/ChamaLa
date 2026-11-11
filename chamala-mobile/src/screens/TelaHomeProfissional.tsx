@@ -1,164 +1,345 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, RefreshControl, Image, TouchableOpacity, Linking, Platform } from 'react-native';
-import { globalStyles } from '../styles/globalStyles';
-import { Button, AlertBanner } from '../components';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  TouchableOpacity,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors, spacing, typography, minTouchTarget } from '../theme';
+import { StatCard } from '../components/StatCard';
+import { SwitchRow } from '../components/SwitchRow';
+import { Tabs } from '../components/Tabs';
+import { OrderCard } from '../components/OrderCard';
 import { api } from '../services/api';
 
-interface OrderItem {
+interface TelaHomeProfissionalProps {
+  onNavigateToOrderDetails?: (orderId: string) => void;
+}
+
+export interface OrderItem {
   id: string;
   title: string;
-  description: string;
   clientName: string;
-  categoryName: string;
-  addressReference?: string;
+  addressReference: string;
   distanceKm: number;
   latitude: number;
   longitude: number;
+  description?: string;
+  categoryName?: string;
+  status?: string;
+  scheduledAt?: string;
 }
 
-export const TelaHomeProfissional = () => {
-  const [orders, setOrders] = useState<OrderItem[]>([]);
+export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
+  onNavigateToOrderDetails,
+}) => {
+  const [isAvailable, setIsAvailable] = useState(true);
+  const [selectedTab, setSelectedTab] = useState<'disponiveis' | 'em_andamento'>('disponiveis');
+
+  const [availableOrders, setAvailableOrders] = useState<OrderItem[]>([]);
+  const [inProgressOrders, setInProgressOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  // Coordenadas base do profissional (Recife)
-  const profLat = -8.0578;
-  const profLon = -34.8829;
-
-  const fetchNearbyOrders = async () => {
+  const carregarPedidos = useCallback(async () => {
     try {
-      setError('');
+      // Coordenadas padrão da base de atuação
+      const lat = -7.9408;
+      const lon = -34.8728;
+
       const response = await api.get('/api/v1/orders/nearby', {
         params: {
-          lat: profLat,
-          lon: profLon,
+          lat,
+          lon,
           closestFirst: true,
         },
       });
-      setOrders(response.data || []);
+
+      const pedidosFormatados: OrderItem[] = (response.data || []).map((p: any) => ({
+        id: String(p.id),
+        title: p.title || 'Sem título',
+        clientName: p.clientName || 'Cliente',
+        addressReference: p.addressReference || 'Localização no mapa',
+        distanceKm: typeof p.distanceKm === 'number' ? p.distanceKm : 0,
+        latitude: typeof p.latitude === 'number' ? p.latitude : -7.9408,
+        longitude: typeof p.longitude === 'number' ? p.longitude : -34.8728,
+        description: p.description,
+        categoryName: p.categoryName,
+        status: p.status,
+        scheduledAt: p.scheduledAt,
+      }));
+
+      setAvailableOrders(pedidosFormatados);
     } catch (err: any) {
-      setError('Não foi possível carregar os pedidos próximos.');
+      console.warn('Erro ao carregar chamados disponíveis:', err?.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchNearbyOrders();
   }, []);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchNearbyOrders();
+  useEffect(() => {
+    carregarPedidos();
+  }, [carregarPedidos]);
+
+  const handleAceitarPedido = async (order: OrderItem) => {
+    try {
+      setActionLoadingId(order.id);
+
+      const userJson = await AsyncStorage.getItem('@chamala:user');
+      const user = userJson ? JSON.parse(userJson) : null;
+
+      if (!user?.id) {
+        Alert.alert('Erro', 'Identificação do profissional não encontrada. Faça login novamente.');
+        return;
+      }
+
+      await api.post(`/api/v1/orders/${order.id}/accept`, {
+        professionalId: user.id,
+      });
+
+      setAvailableOrders((prev) => prev.filter((item) => item.id !== order.id));
+      setInProgressOrders((prev) => [{ ...order, status: 'ACCEPTED' }, ...prev]);
+
+      Alert.alert('Sucesso', 'Pedido aceito! O status agora é Aceito (ACCEPTED).');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Falha ao aceitar pedido.';
+      Alert.alert('Aviso', msg);
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
-  const handleOpenMaps = (lat: number, lon: number) => {
-    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
-    Linking.openURL(url);
+  const handleRecusarPedido = (orderId: string) => {
+    Alert.alert(
+      'Recusar Chamado',
+      'Deseja dispensar este chamado da sua lista?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Recusar',
+          style: 'destructive',
+          onPress: () => {
+            setAvailableOrders((prev) => prev.filter((item) => item.id !== orderId));
+          },
+        },
+      ]
+    );
   };
+
+  const ordersToDisplay = selectedTab === 'disponiveis' ? availableOrders : inProgressOrders;
 
   return (
-    <View style={globalStyles.screenContainer}>
-      <ScrollView
-        contentContainerStyle={globalStyles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <View style={globalStyles.headerLeftBlock}>
-          <Text style={globalStyles.titleLeft}>Painel do Profissional 🛠️</Text>
-          <Text style={globalStyles.subtitleLeft}>Chamados disponíveis na sua região</Text>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true);
+            carregarPedidos();
+          }}
+        />
+      }
+    >
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.subtitle}>Painel Profissional</Text>
+          <Text style={styles.title}>Atendimentos</Text>
         </View>
 
-        {error ? (
-          <View style={{ marginBottom: 16 }}>
-            <AlertBanner message={error} variant="error" />
-          </View>
-        ) : null}
+        <View style={styles.statusBox}>
+          <SwitchRow
+            title="Disponível para novos chamados"
+            value={isAvailable}
+            onValueChange={setIsAvailable}
+          />
+        </View>
+      </View>
 
+      <View style={styles.statsRow}>
+        <View style={styles.statWrapper}>
+          <StatCard
+            emoji="⚡"
+            label="Disponíveis"
+            value={String(availableOrders.length)}
+          />
+        </View>
+        <View style={styles.statWrapper}>
+          <StatCard
+            emoji="📋"
+            label="Em Andamento"
+            value={String(inProgressOrders.length)}
+          />
+        </View>
+      </View>
+
+      <Tabs
+        tabs={[
+          { key: 'disponiveis', label: `Disponíveis (${availableOrders.length})` },
+          { key: 'em_andamento', label: `Em Andamento (${inProgressOrders.length})` },
+        ]}
+        activeKey={selectedTab}
+        onChange={(key: string) => setSelectedTab(key as 'disponiveis' | 'em_andamento')}
+      />
+
+      <View style={styles.ordersSection}>
         {loading ? (
-          <ActivityIndicator size="large" color="#0284c7" style={{ marginTop: 32 }} />
-        ) : orders.length === 0 ? (
-          <View style={[globalStyles.cardBox, { alignItems: 'center', paddingVertical: 32 }]}>
-            <Text style={{ fontSize: 32, marginBottom: 8 }}>📭</Text>
-            <Text style={globalStyles.sectionTitle}>Nenhum pedido no momento</Text>
-            <Text style={[globalStyles.subtitleLeft, { textAlign: 'center', marginTop: 4 }]}>
-              Puxe para baixo para atualizar a lista.
+          <View style={styles.feedbackContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.feedbackText}>Buscando pedidos...</Text>
+          </View>
+        ) : ordersToDisplay.length === 0 ? (
+          <View style={styles.feedbackContainer}>
+            <Text style={styles.emptyTitle}>
+              {selectedTab === 'disponiveis'
+                ? 'Nenhum chamado aberto na região'
+                : 'Nenhum serviço aceito em andamento'}
             </Text>
+            <Text style={styles.feedbackText}>Puxe para baixo para atualizar a lista.</Text>
           </View>
         ) : (
-          <View style={globalStyles.formSection}>
-            {orders.map((order) => {
-              const lat = Number(order.latitude);
-              const lon = Number(order.longitude);
-              const hasCoords = !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
+          ordersToDisplay.map((demand) => {
+            const isProcessing = actionLoadingId === demand.id;
 
-              // Imagem estática do mapa via OpenStreetMap (funciona em qualquer navegador sem chave de API)
-              const staticMapUrl = hasCoords
-                ? `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=15&size=500x200&maptype=mapnik&markers=${lat},${lon},ol-marker`
-                : '';
+            return (
+              <View key={demand.id} style={styles.cardContainer}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => onNavigateToOrderDetails?.(demand.id)}
+                >
+                  <OrderCard order={demand} />
+                </Pressable>
 
-              return (
-                <View key={order.id} style={globalStyles.cardBox}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[globalStyles.sectionTitle, { flex: 1 }]}>{order.title}</Text>
-                    <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#0284c7' }}>
-                      {order.distanceKm != null ? `${Number(order.distanceKm).toFixed(1)} km` : 'Próximo'}
-                    </Text>
+                {selectedTab === 'disponiveis' && (
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.btnReject]}
+                      onPress={() => handleRecusarPedido(demand.id)}
+                      disabled={isProcessing}
+                    >
+                      <Text style={styles.btnRejectText}>Recusar</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.btnAccept]}
+                      onPress={() => handleAceitarPedido(demand)}
+                      disabled={isProcessing}
+                    >
+                      {isProcessing ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.btnAcceptText}>Aceitar Pedido</Text>
+                      )}
+                    </TouchableOpacity>
                   </View>
-
-                  <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                    Cliente: {order.clientName} • {order.categoryName}
-                  </Text>
-
-                  <Text style={{ fontSize: 14, color: '#334155', marginVertical: 8 }}>
-                    {order.description}
-                  </Text>
-
-                  {order.addressReference ? (
-                    <Text style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
-                      Ref: {order.addressReference}
-                    </Text>
-                  ) : null}
-
-                  {/* Visualização do Mapa */}
-                  {hasCoords ? (
-                    <View style={{ width: '100%', height: 160, borderRadius: 8, overflow: 'hidden', marginVertical: 10, position: 'relative', backgroundColor: '#e2e8f0' }}>
-                      <Image
-                        source={{ uri: staticMapUrl }}
-                        style={{ width: '100%', height: '100%' }}
-                        resizeMode="cover"
-                      />
-                      <TouchableOpacity
-                        style={{
-                          position: 'absolute',
-                          bottom: 8,
-                          right: 8,
-                          backgroundColor: '#0284c7',
-                          paddingHorizontal: 10,
-                          paddingVertical: 5,
-                          borderRadius: 6,
-                        }}
-                        onPress={() => handleOpenMaps(lat, lon)}
-                      >
-                        <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: 'bold' }}>
-                          Abrir no Google Maps ↗
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <Text style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginVertical: 6 }}>
-                      Localização no mapa não disponível
-                    </Text>
-                  )}
-
-                  <Button title="Aceitar Chamado" onPress={() => {}} />
-                </View>
-              );
-            })}
-          </View>
+                )}
+              </View>
+            );
+          })
         )}
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  contentContainer: {
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  header: {
+    gap: spacing.sm,
+  },
+  subtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  title: {
+    ...typography.title,
+    color: colors.text,
+  },
+  statusBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: 0,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  statWrapper: {
+    flex: 1,
+    borderRadius: 0,
+  },
+  ordersSection: {
+    gap: spacing.md,
+  },
+  cardContainer: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: 0,
+    overflow: 'hidden',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  actionBtn: {
+    flex: 1,
+    minHeight: minTouchTarget,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  btnReject: {
+    backgroundColor: 'transparent',
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+  },
+  btnRejectText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  btnAccept: {
+    backgroundColor: colors.primary,
+  },
+  btnAcceptText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  feedbackContainer: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  emptyTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+  },
+  feedbackText: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+});

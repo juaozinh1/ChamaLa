@@ -1,78 +1,105 @@
 import React, { useState } from 'react';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { colors } from './src/theme';
+import {
+  TelaLogin,
+  TelaCadastro,
+  TelaCadastroProfissional,
+  TelaHome,
+  TelaHomeProfissional,
+  TelaCriarPedido,
+} from './src/screens';
 
-import { TelaLogin } from './src/screens/TelaLogin';
-import { TelaCadastro } from './src/screens/TelaCadastro';
-import { TelaCadastroProfissional } from './src/screens/TelaCadastroProfissional';
-import { TelaHome } from './src/screens/TelaHome';
-import { TelaHomeProfissional } from './src/screens/TelaHomeProfissional';
-import { TelaCriarPedido } from './src/screens/TelaCriarPedido';
-
-interface UserSession {
-  id: string;
-  name: string;
-  role: 'CLIENT' | 'PROFESSIONAL';
-}
+type ScreenState =
+  | 'login'
+  | 'cadastro_cliente'
+  | 'cadastro_profissional'
+  | 'home_cliente'
+  | 'home_profissional'
+  | 'criar_pedido';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<string>('login');
-  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
+  const [currentScreen, setCurrentScreen] = useState<ScreenState>('login');
 
-  const handleLoginSuccess = (user: UserSession) => {
-    setCurrentUser(user);
-    if (user.role === 'PROFESSIONAL') {
-      setCurrentScreen('homeProfissional');
+  const handleLoginSuccess = (role: 'client' | 'professional') => {
+    if (role === 'professional') {
+      setCurrentScreen('home_profissional');
     } else {
-      setCurrentScreen('homeCliente');
+      setCurrentScreen('home_cliente');
+    }
+  };
+
+  const renderCurrentScreen = () => {
+    switch (currentScreen) {
+      case 'login':
+        return (
+          <TelaLogin
+            onLoginSuccess={handleLoginSuccess}
+            onNavigateToRegister={() => setCurrentScreen('cadastro_cliente')}
+            onNavigateToProfessionalRegister={() =>
+              setCurrentScreen('cadastro_profissional')
+            }
+          />
+        );
+
+      case 'cadastro_cliente':
+        return (
+          <TelaCadastro
+            onSuccess={() => setCurrentScreen('login')}
+            onNavigateToLogin={() => setCurrentScreen('login')}
+          />
+        );
+
+      case 'cadastro_profissional':
+        return (
+          <TelaCadastroProfissional
+            onSuccess={() => setCurrentScreen('login')}
+          />
+        );
+
+      case 'home_cliente':
+        return (
+          <TelaHome
+            onNavigateToNewOrder={() => setCurrentScreen('criar_pedido')}
+            onNavigateToOrderDetails={(_orderId) => {}}
+          />
+        );
+
+      case 'home_profissional':
+        return (
+          <TelaHomeProfissional
+            onNavigateToOrderDetails={(_orderId) => {}}
+          />
+        );
+
+      case 'criar_pedido':
+        return <TelaCriarPedido />;
+
+      default:
+        return (
+          <TelaLogin
+            onLoginSuccess={handleLoginSuccess}
+            onNavigateToRegister={() => setCurrentScreen('cadastro_cliente')}
+            onNavigateToProfessionalRegister={() =>
+              setCurrentScreen('cadastro_profissional')
+            }
+          />
+        );
     }
   };
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
-
-        {currentScreen === 'login' && (
-          <TelaLogin
-            onLoginSuccess={handleLoginSuccess}
-            onNavigateToCadastro={() => setCurrentScreen('cadastro')}
-            onNavigateToCadastroProfissional={() => setCurrentScreen('cadastroProfissional')}
-          />
-        )}
-
-        {currentScreen === 'cadastro' && (
-          <TelaCadastro
-            onBack={() => setCurrentScreen('login')}
-            onSuccess={() => setCurrentScreen('login')}
-          />
-        )}
-
-        {currentScreen === 'cadastroProfissional' && (
-          <TelaCadastroProfissional
-            onBack={() => setCurrentScreen('login')}
-            onSuccess={() => setCurrentScreen('login')}
-          />
-        )}
-
-        {currentScreen === 'homeCliente' && (
-          <TelaHome
-            onNavigateToNewOrder={() => setCurrentScreen('criarPedido')}
-          />
-        )}
-
-        {currentScreen === 'homeProfissional' && (
-          <TelaHomeProfissional />
-        )}
-
-        {currentScreen === 'criarPedido' && currentUser && (
-          <TelaCriarPedido
-            clientId={currentUser.id}
-            onBack={() => setCurrentScreen('homeCliente')}
-            onSuccess={() => setCurrentScreen('homeCliente')}
-          />
-        )}
-      </SafeAreaView>
-    </SafeAreaProvider>
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
+      {renderCurrentScreen()}
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+});

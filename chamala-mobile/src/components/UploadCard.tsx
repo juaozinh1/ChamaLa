@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderRadius: 0,
     backgroundColor: colors.surface,
   },
   cardDone: { borderStyle: 'solid', borderColor: colors.success },
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   iconBox: {
     width: 56,
     height: 56,
-    borderRadius: radius.md,
+    borderRadius: 0,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   plus: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 0,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: spacing.sm,

@@ -1,122 +1,220 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { globalStyles } from '../styles/globalStyles';
-import { Input, Button, AlertBanner } from '../components';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors, spacing, typography, minTouchTarget } from '../theme';
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
+import { AlertBanner } from '../components/AlertBanner';
 import { api } from '../services/api';
 
-interface TelaLoginProps {
-  onLoginSuccess: (user: { id: string; name: string; role: 'CLIENT' | 'PROFESSIONAL' }) => void;
-  onNavigateToCadastro: () => void;
-  onNavigateToCadastroProfissional: () => void;
+interface LoginResponseData {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  token?: string;
 }
 
-export const TelaLogin = ({
+interface TelaLoginProps {
+  onLoginSuccess?: (role: 'client' | 'professional') => void;
+  onNavigateToRegister?: () => void;
+  onNavigateToProfessionalRegister?: () => void;
+}
+
+export const TelaLogin: React.FC<TelaLoginProps> = ({
   onLoginSuccess,
-  onNavigateToCadastro,
-  onNavigateToCadastroProfissional,
-}: TelaLoginProps) => {
+  onNavigateToRegister,
+  onNavigateToProfessionalRegister,
+}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
-    setErrorMessage('');
-
     if (!email.trim() || !password.trim()) {
-      setErrorMessage('Por favor, preencha o e-mail e a senha.');
+      setError('Preencha seu e-mail e senha.');
       return;
     }
 
     try {
       setLoading(true);
-      const response = await api.post('/api/v1/auth/login', {
+      setError(null);
+
+      // Chamada ao endpoint correto no Spring Boot
+      const response = await api.post<LoginResponseData>('/api/v1/auth/login', {
         email: email.trim(),
-        password: password.trim(),
+        password,
       });
 
-      const { id, name, role } = response.data;
-      const normalizedRole = role.includes('PROFESSIONAL') ? 'PROFESSIONAL' : 'CLIENT';
+      // Salva a sessão completa no dispositivo para recuperar o clientId e token depois
+      await AsyncStorage.setItem('@chamala:user', JSON.stringify(response.data));
 
-      onLoginSuccess({
-        id,
-        name,
-        role: normalizedRole,
-      });
+      const userRole = response.data.role;
+
+      const isProfessional =
+        userRole?.toUpperCase() === 'PROFESSIONAL' ||
+        userRole?.toUpperCase() === 'PRESTADOR' ||
+        userRole?.toLowerCase() === 'professional';
+
+      if (isProfessional) {
+        onLoginSuccess?.('professional');
+      } else {
+        onLoginSuccess?.('client');
+      }
     } catch (err: any) {
-      setErrorMessage(
-        err?.response?.data?.message || 'E-mail ou senha incorretos.'
-      );
+      const errorMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'E-mail ou senha incorretos.';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={globalStyles.screenContainer}>
-      <ScrollView
-        contentContainerStyle={globalStyles.centeredContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={globalStyles.headerBlock}>
-          <View style={globalStyles.logoContainer}>
-            <Text style={{ fontSize: 36 }}>🛠️</Text>
-          </View>
-          <Text style={globalStyles.title}>ChamaLá</Text>
-          <Text style={globalStyles.subtitle}>
-            Conectando você aos melhores profissionais
-          </Text>
-        </View>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.contentContainer}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.header}>
+        <Text style={styles.badge}>CHAMALÁ</Text>
+        <Text style={styles.title}>Acessar Plataforma</Text>
+        <Text style={styles.subtitle}>
+          Entre com sua conta para solicitar ou prestar serviços.
+        </Text>
+      </View>
 
-        {errorMessage ? (
-          <View style={{ marginBottom: 16 }}>
-            <AlertBanner message={errorMessage} variant="error" />
-          </View>
-        ) : null}
+      {error ? <AlertBanner message={error} /> : null}
 
-        <View style={globalStyles.formSection}>
+      <View style={styles.form}>
+        <View style={styles.field}>
+          <Text style={styles.label}>E-mail</Text>
           <Input
-            label="E-mail"
-            placeholder="seu@email.com"
             value={email}
             onChangeText={setEmail}
+            placeholder="seu@email.com"
             keyboardType="email-address"
             autoCapitalize="none"
           />
+        </View>
 
+        <View style={styles.field}>
+          <Text style={styles.label}>Senha</Text>
           <Input
-            label="Senha"
-            placeholder="••••••••"
             value={password}
             onChangeText={setPassword}
+            placeholder="Sua senha secreta"
             secureTextEntry
           />
-
-          <View style={globalStyles.formActions}>
-            <Button
-              title={loading ? 'Entrando...' : 'Entrar'}
-              onPress={handleLogin}
-              disabled={loading}
-            />
-          </View>
         </View>
 
-        <View style={{ marginTop: 24, gap: 12 }}>
-          <View style={globalStyles.footerNav}>
-            <Text style={globalStyles.footerText}>Não tem conta de cliente?</Text>
-            <TouchableOpacity onPress={onNavigateToCadastro}>
-              <Text style={globalStyles.footerLink}>Cadastre-se</Text>
-            </TouchableOpacity>
-          </View>
+        <Button
+          title="Entrar"
+          loading={loading}
+          onPress={handleLogin}
+          style={styles.loginBtn}
+        />
+      </View>
 
-          <View style={globalStyles.footerNav}>
-            <Text style={globalStyles.footerText}>Quer prestar serviços?</Text>
-            <TouchableOpacity onPress={onNavigateToCadastroProfissional}>
-              <Text style={globalStyles.footerLink}>Cadastre-se como Profissional</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </View>
+      <View style={styles.footer}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onNavigateToRegister}
+          style={styles.linkButton}
+        >
+          <Text style={styles.linkText}>
+            Ainda não tem conta? <Text style={styles.linkBold}>Cadastre-se</Text>
+          </Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={onNavigateToProfessionalRegister}
+          style={styles.linkButton}
+        >
+          <Text style={styles.professionalLinkText}>
+            Quero prestar serviços como profissional
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  contentContainer: {
+    padding: spacing.lg,
+    justifyContent: 'center',
+    minHeight: '100%',
+    gap: spacing.xl,
+  },
+  header: {
+    gap: spacing.xs,
+  },
+  badge: {
+    ...typography.caption,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 1.5,
+  },
+  title: {
+    ...typography.title,
+    color: colors.text,
+  },
+  subtitle: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  form: {
+    gap: spacing.md,
+  },
+  field: {
+    gap: spacing.xs,
+  },
+  label: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  loginBtn: {
+    marginTop: spacing.sm,
+    borderRadius: 0,
+    minHeight: minTouchTarget,
+  },
+  footer: {
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  linkButton: {
+    minHeight: minTouchTarget,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  linkText: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  linkBold: {
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  professionalLinkText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.text,
+    textDecorationLine: 'underline',
+  },
+});

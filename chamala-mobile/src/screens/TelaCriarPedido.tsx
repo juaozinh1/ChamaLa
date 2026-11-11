@@ -1,294 +1,310 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { globalStyles } from '../styles/globalStyles';
-import { Input, Button, AlertBanner, LeafletMapPicker } from '../components';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { colors, spacing, typography, minTouchTarget } from '../theme';
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
+import { AlertBanner } from '../components/AlertBanner';
+import { TextArea } from '../components/TextArea';
+import { Chip } from '../components/Chip';
+import { UploadCard } from '../components/UploadCard';
+import { PhotoTile } from '../components/PhotoTile';
+import { LeafletMapPicker } from '../components/LeafletMapPicker';
+import { useCriarPedidoForm } from '../hooks/useCriarPedidoForm';
 import { api } from '../services/api';
 
-interface TelaCriarPedidoProps {
-  clientId: string;
-  onBack: () => void;
-  onSuccess: () => void;
+interface CategoryItem {
+  id: string | number;
+  name: string;
 }
 
-export const TelaCriarPedido = ({
-  clientId,
-  onBack,
-  onSuccess,
-}: TelaCriarPedidoProps) => {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [addressReference, setAddressReference] = useState('');
-  const [coords, setCoords] = useState<{ lat: number; lng: number }>({
-    lat: -8.0578,
-    lng: -34.8829, // Recife/PE
-  });
+const DEFAULT_COORDS = {
+  lat: -7.9408,
+  lng: -34.8728,
+};
 
-  // Estado da data e hora agendada
-  const [scheduledDate, setScheduledDate] = useState<Date>(new Date(Date.now() + 3600000)); // Padrão: 1 hora à frente
-  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
-  const [showPicker, setShowPicker] = useState(false);
+function formatarDataBr(text: string): string {
+  const limpo = text.replace(/\D/g, '').slice(0, 8);
+  if (limpo.length <= 2) return limpo;
+  if (limpo.length <= 4) return `${limpo.slice(0, 2)}/${limpo.slice(2)}`;
+  return `${limpo.slice(0, 2)}/${limpo.slice(2, 4)}/${limpo.slice(4)}`;
+}
 
-  const [errorMessage, setErrorMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+function formatarHoraBr(text: string): string {
+  const limpo = text.replace(/\D/g, '').slice(0, 4);
+  if (limpo.length <= 2) return limpo;
+  return `${limpo.slice(0, 2)}:${limpo.slice(2)}`;
+}
 
-  // Manipulador do seletor nativo (Android/iOS)
-  const onNativeDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowPicker(false);
-    }
+export const TelaCriarPedido: React.FC = () => {
+  const {
+    categoriaId,
+    setCategoriaId,
+    descricao,
+    setDescricao,
+    fotos,
+    handleAddPhoto,
+    handleRemovePhoto,
+    setLocalizacao,
+    dataAgendada,
+    setDataAgendada,
+    horaAgendada,
+    setHoraAgendada,
+    submitting,
+    error,
+    handleSubmit,
+  } = useCriarPedidoForm();
 
-    if (event.type === 'dismissed') {
-      return;
-    }
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState<boolean>(true);
 
-    if (selectedDate) {
-      if (Platform.OS === 'android' && pickerMode === 'date') {
-        // No Android, após escolher o dia, abre imediatamente o seletor de hora
-        const updatedDate = new Date(selectedDate);
-        updatedDate.setHours(scheduledDate.getHours(), scheduledDate.getMinutes());
-        setScheduledDate(updatedDate);
-        setPickerMode('time');
-        setShowPicker(true);
-      } else {
-        setScheduledDate(selectedDate);
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCategories() {
+      try {
+        setLoadingCategories(true);
+        const response = await api.get('/categories');
+        if (isMounted) {
+          setCategories(response.data);
+        }
+      } catch {
+        if (isMounted) {
+          setCategories([
+            { id: 1, name: 'Hidráulica' },
+            { id: 2, name: 'Elétrica' },
+            { id: 3, name: 'Pintura' },
+            { id: 4, name: 'Alvenaria' },
+            { id: 5, name: 'Limpeza' },
+          ]);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingCategories(false);
+        }
       }
     }
-  };
 
-  const handleOpenDatePicker = () => {
-    setPickerMode('date');
-    setShowPicker(true);
-  };
+    loadCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  const handleOpenTimePicker = () => {
-    setPickerMode('time');
-    setShowPicker(true);
-  };
-
-  const handleCriarPedido = async () => {
-    setErrorMessage('');
-
-    if (!title.trim() || !description.trim()) {
-      setErrorMessage('Informe o título e a descrição do serviço.');
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permissão necessária',
+        'Autorize o acesso às fotos para comprovar a demanda.'
+      );
       return;
     }
 
-    try {
-      setLoading(true);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7,
+    });
 
-      await api.post(`/api/v1/orders?clientId=${clientId}`, {
-        title: title.trim(),
-        description: description.trim(),
-        addressReference: addressReference.trim(),
-        latitude: coords.lat,
-        longitude: coords.lng,
-        categoryId: 1, // ID da categoria existente no banco
-        scheduledAt: scheduledDate.toISOString(), // Envia Instant em ISO-8601
-      });
-
-      onSuccess();
-    } catch (err: any) {
-      setErrorMessage(
-        err?.response?.data?.message || 'Falha ao publicar pedido no servidor.'
-      );
-    } finally {
-      setLoading(false);
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      handleAddPhoto(result.assets[0].uri);
     }
   };
 
-  // Formatação visual da data e hora
-  const formattedDate = scheduledDate.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-
-  const formattedTime = scheduledDate.toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
   return (
-    <View style={globalStyles.screenContainer}>
-      <ScrollView contentContainerStyle={globalStyles.scrollContent} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={onBack} style={{ marginBottom: 16 }}>
-          <Text style={globalStyles.sectionLink}>← Voltar</Text>
-        </TouchableOpacity>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.contentContainer}
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>Novo Pedido</Text>
+        <Text style={styles.subtitle}>
+          Preencha os dados do chamado para os profissionais disponíveis.
+        </Text>
+      </View>
 
-        <View style={globalStyles.headerLeftBlock}>
-          <Text style={globalStyles.titleLeft}>Criar Novo Pedido 📋</Text>
-          <Text style={globalStyles.subtitleLeft}>
-            Descreva o serviço, escolha a data/hora e o local no mapa
-          </Text>
-        </View>
+      {error ? <AlertBanner message={error} /> : null}
 
-        {errorMessage ? (
-          <View style={{ marginBottom: 16 }}>
-            <AlertBanner message={errorMessage} variant="error" />
-          </View>
-        ) : null}
-
-        <View style={globalStyles.formSection}>
-          <Input
-            label="Título do Pedido"
-            placeholder="Ex: Instalação de ar-condicionado"
-            value={title}
-            onChangeText={setTitle}
-          />
-
-          <Input
-            label="Descrição dos Detalhes"
-            placeholder="Descreva o que precisa ser feito..."
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={3}
-          />
-
-          {/* ================= SELETOR DE DATA E HORA ================= */}
-          <View style={{ marginBottom: 16 }}>
-            <Text style={[globalStyles.subtitleLeft, { marginBottom: 8, fontWeight: 'bold' }]}>
-              Data e Horário do Atendimento:
-            </Text>
-
-            {Platform.OS === 'web' ? (
-              // Modo Web: Controles nativos do browser com calendário pop-up
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Dia</Text>
-                  <input
-                    type="date"
-                    value={scheduledDate.toISOString().split('T')[0]}
-                    min={new Date().toISOString().split('T')[0]}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        const [year, month, day] = e.target.value.split('-').map(Number);
-                        const newD = new Date(scheduledDate);
-                        newD.setFullYear(year, month - 1, day);
-                        setScheduledDate(newD);
-                      }
-                    }}
-                    style={{
-                      padding: '10px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '14px',
-                      width: '100%',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>Hora</Text>
-                  <input
-                    type="time"
-                    value={scheduledDate.toTimeString().slice(0, 5)}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        const [hours, minutes] = e.target.value.split(':').map(Number);
-                        const newD = new Date(scheduledDate);
-                        newD.setHours(hours, minutes);
-                        setScheduledDate(newD);
-                      }
-                    }}
-                    style={{
-                      padding: '10px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '14px',
-                      width: '100%',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </View>
-              </View>
-            ) : (
-              // Modo Mobile: Botões que acionam o DatePicker nativo do Android/iOS
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity
-                  onPress={handleOpenDatePicker}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#f1f5f9',
-                    padding: 12,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: '#cbd5e1',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 12, color: '#64748b' }}>📅 Data</Text>
-                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1e293b', marginTop: 4 }}>
-                    {formattedDate}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleOpenTimePicker}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#f1f5f9',
-                    padding: 12,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: '#cbd5e1',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 12, color: '#64748b' }}>⏰ Horário</Text>
-                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1e293b', marginTop: 4 }}>
-                    {formattedTime}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Componente Modal Nativo (Mobile) */}
-            {showPicker && Platform.OS !== 'web' && (
-              <DateTimePicker
-                value={scheduledDate}
-                mode={pickerMode}
-                is24Hour={true}
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                minimumDate={new Date()}
-                onChange={onNativeDateChange}
+      {/* Categoria */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Categoria do Serviço</Text>
+        {loadingCategories ? (
+          <ActivityIndicator color={colors.primary} size="small" style={styles.loader} />
+        ) : (
+          <View style={styles.categoriesContainer}>
+            {categories.map((cat) => (
+              <Chip
+                key={String(cat.id)}
+                label={cat.name}
+                selected={categoriaId === String(cat.id)}
+                onPress={() => setCategoriaId(String(cat.id))}
               />
-            )}
+            ))}
           </View>
+        )}
+      </View>
 
-          <Input
-            label="Ponto de Referência"
-            placeholder="Ex: Próximo à praça / Bloco B, Apt 101"
-            value={addressReference}
-            onChangeText={setAddressReference}
-          />
-
-          <View style={{ marginVertical: 8 }}>
-            <Text style={[globalStyles.subtitleLeft, { marginBottom: 6, fontWeight: 'bold' }]}>
-              Selecione o local exato no mapa:
-            </Text>
-            <View style={{ height: 260, borderRadius: 8, overflow: 'hidden' }}>
-              <LeafletMapPicker
-                initialCoords={coords}
-                onLocationSelected={(newCoords) => setCoords(newCoords)}
-              />
-            </View>
-            <Text style={[globalStyles.subtitleLeft, { fontSize: 12, marginTop: 4 }]}>
-              Lat: {coords.lat.toFixed(5)} | Lng: {coords.lng.toFixed(5)}
-            </Text>
+      {/* Agendamento de Horário Comercial */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Data e Horário do Atendimento</Text>
+        <Text style={styles.helperText}>Dias úteis, das 08:00 às 18:00</Text>
+        <View style={styles.scheduleInputs}>
+          <View style={styles.inputCol}>
+            <Text style={styles.label}>Data (DD/MM/AAAA)</Text>
+            <Input
+              value={dataAgendada}
+              onChangeText={(text) => setDataAgendada(formatarDataBr(text))}
+              placeholder="Ex: 12/11/2026"
+              keyboardType="numeric"
+              maxLength={10}
+            />
           </View>
-
-          <View style={globalStyles.formActions}>
-            <Button
-              title={loading ? 'Publicando...' : 'Publicar Pedido'}
-              onPress={handleCriarPedido}
-              disabled={loading}
+          <View style={styles.inputCol}>
+            <Text style={styles.label}>Horário (HH:MM)</Text>
+            <Input
+              value={horaAgendada}
+              onChangeText={(text) => setHoraAgendada(formatarHoraBr(text))}
+              placeholder="Ex: 10:30"
+              keyboardType="numeric"
+              maxLength={5}
             />
           </View>
         </View>
-      </ScrollView>
-    </View>
+      </View>
+
+      {/* Descrição */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Descrição da Demanda</Text>
+        <TextArea
+          value={descricao}
+          onChangeText={setDescricao}
+          placeholder="Descreva detalhadamente o problema ou serviço necessário..."
+        />
+      </View>
+
+      {/* Fotos */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Imagens de Apoio ({fotos.length}/5)</Text>
+        <View style={styles.photosGrid}>
+          {fotos.map((uri, index) => (
+            <PhotoTile
+              key={`${uri}-${index}`}
+              uri={uri}
+              onRemove={() => handleRemovePhoto(index)}
+            />
+          ))}
+          {fotos.length < 5 ? (
+            <UploadCard
+              title="Adicionar Foto"
+              description="Envie imagens do local ou do problema"
+              onPick={handlePickImage}
+            />
+          ) : null}
+        </View>
+      </View>
+
+      {/* Mapa */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Ponto de Atendimento</Text>
+        <View style={styles.mapWrapper}>
+          <LeafletMapPicker
+            initialCoords={DEFAULT_COORDS}
+            onLocationSelected={(coords: { lat: number; lng: number }) => {
+              setLocalizacao(coords);
+            }}
+          />
+        </View>
+      </View>
+
+      <Button
+        title="Publicar Pedido"
+        loading={submitting}
+        onPress={() =>
+          handleSubmit(() => {
+            Alert.alert('Sucesso', 'Pedido agendado e publicado com sucesso!');
+          })
+        }
+        style={styles.submitBtn}
+      />
+    </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  contentContainer: {
+    padding: spacing.lg,
+    gap: spacing.xl,
+  },
+  header: {
+    gap: spacing.xs,
+  },
+  title: {
+    ...typography.title,
+    color: colors.text,
+  },
+  subtitle: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  section: {
+    gap: spacing.sm,
+  },
+  sectionTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+  },
+  helperText: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+  loader: {
+    alignSelf: 'flex-start',
+    marginVertical: spacing.sm,
+  },
+  categoriesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  scheduleInputs: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  inputCol: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  label: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  photosGrid: {
+    gap: spacing.sm,
+  },
+  mapWrapper: {
+    height: 220,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 0,
+    overflow: 'hidden',
+  },
+  submitBtn: {
+    marginTop: spacing.md,
+    minHeight: minTouchTarget,
+    borderRadius: 0,
+  },
+});
