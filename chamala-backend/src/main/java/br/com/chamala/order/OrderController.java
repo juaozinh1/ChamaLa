@@ -42,6 +42,11 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrdersByClient(clientId));
     }
 
+    @GetMapping("/professional")
+    public ResponseEntity<List<OrderResponse>> getOrdersByProfessional(@RequestParam UUID professionalId) {
+        return ResponseEntity.ok(orderService.getOrdersByProfessional(professionalId));
+    }
+
     @PostMapping("/{orderId}/accept")
     public ResponseEntity<?> acceptOrder(
             @PathVariable UUID orderId,
@@ -53,5 +58,18 @@ public class OrderController {
 
         orderService.acceptOrder(orderId, UUID.fromString(professionalIdStr));
         return ResponseEntity.ok(Map.of("message", "Pedido aceito com sucesso!"));
+    }
+
+    @PostMapping("/{orderId}/complete")
+    public ResponseEntity<?> completeOrder(
+            @PathVariable UUID orderId,
+            @RequestBody Map<String, String> body) {
+        String userIdStr = body.get("userId");
+        if (userIdStr == null || userIdStr.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "O ID do usuário é obrigatório."));
+        }
+
+        orderService.completeOrder(orderId, UUID.fromString(userIdStr));
+        return ResponseEntity.ok(Map.of("message", "Pedido finalizado com sucesso!"));
     }
 }

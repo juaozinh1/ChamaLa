@@ -7,6 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, typography, minTouchTarget } from '../theme';
@@ -15,6 +16,7 @@ import { SearchInput } from '../components/SearchInput';
 import { Chip } from '../components/Chip';
 import { Tabs } from '../components/Tabs';
 import { OrderCard } from '../components/OrderCard';
+import { ReviewModal } from '../components/ReviewModal';
 import { api } from '../services/api';
 
 const CATEGORIES = ['Todos', 'Hidráulica', 'Elétrica', 'Pintura', 'Alvenaria'];
@@ -33,15 +35,18 @@ export interface ClientOrderItem {
   latitude: number;
   longitude: number;
   categoryName?: string;
-  status: 'OPEN' | 'ACCEPTED' | string;
+  status: 'OPEN' | 'ACCEPTED' | 'COMPLETED' | string;
   description?: string;
   scheduledAt?: string;
+  professionalName?: string;
+  reviewed?: boolean;
 }
 
 export const TelaHome: React.FC<TelaHomeProps> = ({
   onNavigateToNewOrder,
   onNavigateToOrderDetails,
 }) => {
+  const [clientId, setClientId] = useState<string>('');
   const [clientName, setClientName] = useState('Cliente');
   const [orders, setOrders] = useState<ClientOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +54,10 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [selectedTab, setSelectedTab] = useState<'open' | 'accepted'>('open');
+  const [selectedTab, setSelectedTab] = useState<'open' | 'accepted' | 'completed'>('open');
+
+  // Controle do Modal de Avaliação
+  const [reviewOrder, setReviewOrder] = useState<ClientOrderItem | null>(null);
 
   const carregarPedidos = useCallback(async () => {
     try {
@@ -64,6 +72,8 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
         setOrders([]);
         return;
       }
+
+      setClientId(user.id);
 
       const response = await api.get('/api/v1/orders/client', {
         params: { clientId: user.id },
@@ -81,6 +91,8 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
         status: item.status || 'OPEN',
         description: item.description,
         scheduledAt: item.scheduledAt,
+        professionalName: item.professionalName || 'o profissional',
+        reviewed: Boolean(item.reviewed),
       }));
 
       setOrders(data);
@@ -96,13 +108,17 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
     carregarPedidos();
   }, [carregarPedidos]);
 
-  // Separação dos chamados em aberto vs aceitos por profissionais
   const openOrders = orders.filter((o) => o.status === 'OPEN');
   const acceptedOrders = orders.filter((o) => o.status === 'ACCEPTED');
+  const completedOrders = orders.filter((o) => o.status === 'COMPLETED');
 
-  const currentTabList = selectedTab === 'open' ? openOrders : acceptedOrders;
+  const currentTabList =
+    selectedTab === 'open'
+      ? openOrders
+      : selectedTab === 'accepted'
+      ? acceptedOrders
+      : completedOrders;
 
-  // Filtros de busca textual e especialidade
   const filteredOrders = currentTabList.filter((order) => {
     const matchesCategory =
       selectedCategory === 'Todos' ||
@@ -116,119 +132,158 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
   });
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.contentContainer}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            setRefreshing(true);
+    <View style={styles.screen}>
+      <ScrollView
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              carregarPedidos();
+            }}
+          />
+        }
+      >
+        <View style={styles.topBar}>
+          <View style={styles.greeting}>
+            <Text style={styles.subGreeting}>Olá, {clientName}</Text>
+            <Text style={styles.mainTitle}>Precisa de ajuda hoje?</Text>
+          </View>
+          <Button
+            title="+ Novo Pedido"
+            onPress={() => onNavigateToNewOrder?.()}
+            style={styles.newOrderBtn}
+          />
+        </View>
+
+        <SearchInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar meus pedidos..."
+        />
+
+        <View style={styles.categoriesRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.categoriesContainer}>
+              {CATEGORIES.map((cat) => (
+                <Chip
+                  key={cat}
+                  label={cat}
+                  selected={selectedCategory === cat}
+                  onPress={() => setSelectedCategory(cat)}
+                />
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+
+        <Tabs
+          tabs={[
+            { key: 'open', label: `Abertos (${openOrders.length})` },
+            { key: 'accepted', label: `Aceitos (${acceptedOrders.length})` },
+            { key: 'completed', label: `Concluídos (${completedOrders.length})` },
+          ]}
+          activeKey={selectedTab}
+          onChange={(key: string) =>
+            setSelectedTab(key as 'open' | 'accepted' | 'completed')
+          }
+        />
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              {selectedTab === 'open'
+                ? 'Chamados Aguardando Profissional'
+                : selectedTab === 'accepted'
+                ? 'Chamados em Andamento'
+                : 'Serviços Finalizados'}
+            </Text>
+            <Text style={styles.counterBadge}>{filteredOrders.length}</Text>
+          </View>
+
+          {loading ? (
+            <View style={styles.emptyContainer}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.emptyDesc}>Carregando seus pedidos...</Text>
+            </View>
+          ) : orders.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>📦</Text>
+              <Text style={styles.emptyTitle}>Você ainda não criou nenhum pedido</Text>
+              <Text style={styles.emptyDesc}>
+                Precisa de reparo, reforma ou instalação? Faça sua solicitação agora mesmo.
+              </Text>
+              <Button
+                title="Criar Primeiro Pedido"
+                onPress={() => onNavigateToNewOrder?.()}
+                style={styles.emptyActionBtn}
+              />
+            </View>
+          ) : filteredOrders.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyTitle}>
+                {selectedTab === 'open'
+                  ? 'Nenhum pedido aguardando no momento'
+                  : selectedTab === 'accepted'
+                  ? 'Nenhum pedido aceito no momento'
+                  : 'Nenhum serviço concluído ainda'}
+              </Text>
+              <Text style={styles.emptyDesc}>
+                {search || selectedCategory !== 'Todos'
+                  ? 'Nenhum resultado para os filtros selecionados.'
+                  : 'Puxe para baixo para atualizar o status dos seus pedidos.'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.ordersList}>
+              {filteredOrders.map((order) => (
+                <View key={order.id} style={styles.orderCardWrapper}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => onNavigateToOrderDetails?.(order.id)}
+                  >
+                    <OrderCard order={order} />
+                  </Pressable>
+
+                  {selectedTab === 'completed' && (
+                    <View style={styles.reviewFooter}>
+                      {order.reviewed ? (
+                        <Text style={styles.reviewedBadge}>✓ Serviço Avaliado</Text>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.rateButton}
+                          onPress={() => setReviewOrder(order)}
+                        >
+                          <Text style={styles.rateButtonText}>
+                            ★ Avaliar Profissional ({order.professionalName})
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {reviewOrder && (
+        <ReviewModal
+          visible={Boolean(reviewOrder)}
+          orderId={reviewOrder.id}
+          clientId={clientId}
+          professionalName={reviewOrder.professionalName}
+          onClose={() => setReviewOrder(null)}
+          onSuccess={() => {
+            setReviewOrder(null);
             carregarPedidos();
           }}
         />
-      }
-    >
-      <View style={styles.topBar}>
-        <View style={styles.greeting}>
-          <Text style={styles.subGreeting}>Olá, {clientName}</Text>
-          <Text style={styles.mainTitle}>Precisa de ajuda hoje?</Text>
-        </View>
-        <Button
-          title="+ Novo Pedido"
-          onPress={() => onNavigateToNewOrder?.()}
-          style={styles.newOrderBtn}
-        />
-      </View>
-
-      <SearchInput
-        value={search}
-        onChangeText={setSearch}
-        placeholder="Buscar meus pedidos..."
-      />
-
-      <View style={styles.categoriesRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.categoriesContainer}>
-            {CATEGORIES.map((cat) => (
-              <Chip
-                key={cat}
-                label={cat}
-                selected={selectedCategory === cat}
-                onPress={() => setSelectedCategory(cat)}
-              />
-            ))}
-          </View>
-        </ScrollView>
-      </View>
-
-      <Tabs
-        tabs={[
-          { key: 'open', label: `Aguardando (${openOrders.length})` },
-          { key: 'accepted', label: `Aceitos (${acceptedOrders.length})` },
-        ]}
-        activeKey={selectedTab}
-        onChange={(key: string) => setSelectedTab(key as 'open' | 'accepted')}
-      />
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            {selectedTab === 'open' ? 'Chamados Aguardando Profissional' : 'Chamados Aceitos'}
-          </Text>
-          <Text style={styles.counterBadge}>{filteredOrders.length}</Text>
-        </View>
-
-        {loading ? (
-          <View style={styles.emptyContainer}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.emptyDesc}>Carregando seus pedidos...</Text>
-          </View>
-        ) : orders.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📦</Text>
-            <Text style={styles.emptyTitle}>Você ainda não criou nenhum pedido</Text>
-            <Text style={styles.emptyDesc}>
-              Precisa de reparo, reforma ou instalação? Faça sua solicitação agora mesmo.
-            </Text>
-            <Button
-              title="Criar Primeiro Pedido"
-              onPress={() => onNavigateToNewOrder?.()}
-              style={styles.emptyActionBtn}
-            />
-          </View>
-        ) : filteredOrders.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>
-              {selectedTab === 'open'
-                ? 'Nenhum pedido aguardando no momento'
-                : 'Nenhum pedido aceito no momento'}
-            </Text>
-            <Text style={styles.emptyDesc}>
-              {search || selectedCategory !== 'Todos'
-                ? 'Nenhum resultado para os filtros selecionados.'
-                : selectedTab === 'open'
-                ? 'Seus chamados em aberto aparecerão aqui.'
-                : 'Assim que um profissional aceitar sua solicitação, ela aparecerá nesta aba.'}
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.ordersList}>
-            {filteredOrders.map((order) => (
-              <Pressable
-                key={order.id}
-                accessibilityRole="button"
-                onPress={() => onNavigateToOrderDetails?.(order.id)}
-                style={styles.orderPressable}
-              >
-                <OrderCard order={order} />
-              </Pressable>
-            ))}
-          </View>
-        )}
-      </View>
-    </ScrollView>
+      )}
+    </View>
   );
 };
 
@@ -293,11 +348,37 @@ const styles = StyleSheet.create({
   ordersList: {
     gap: spacing.sm,
   },
-  orderPressable: {
+  orderCardWrapper: {
     borderRadius: 0,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  reviewFooter: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  rateButton: {
+    backgroundColor: '#EAB308',
+    minHeight: minTouchTarget,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  rateButtonText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  reviewedBadge: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#16A34A',
+    textAlign: 'right',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.background,
   },
   emptyContainer: {
     paddingVertical: spacing.xl,

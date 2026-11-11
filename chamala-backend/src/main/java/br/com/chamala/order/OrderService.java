@@ -4,6 +4,7 @@ import br.com.chamala.category.Category;
 import br.com.chamala.category.CategoryRepository;
 import br.com.chamala.order.dto.OrderCreateRequest;
 import br.com.chamala.order.dto.OrderResponse;
+import br.com.chamala.review.ReviewRepository;
 import br.com.chamala.user.User;
 import br.com.chamala.user.UserRepository;
 import org.springframework.stereotype.Service;
@@ -29,13 +30,16 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
+    private final ReviewRepository reviewRepository;
 
     public OrderService(OrderRepository orderRepository,
                         UserRepository userRepository,
-                        CategoryRepository categoryRepository) {
+                        CategoryRepository categoryRepository,
+                        ReviewRepository reviewRepository) {
         this.orderRepository = orderRepository;
         this.userRepository = userRepository;
         this.categoryRepository = categoryRepository;
+        this.reviewRepository = reviewRepository;
     }
 
     @Transactional
@@ -68,33 +72,7 @@ public class OrderService {
         );
 
         Order saved = orderRepository.save(order);
-
-        Long catId = (category.getId() != null) ? category.getId().longValue() : null;
-
-        Instant scheduledInstant = (saved.getScheduledAt() != null)
-                ? saved.getScheduledAt().atZone(BRASILIA_ZONE).toInstant()
-                : null;
-
-        Instant createdInstant = (saved.getCreatedAt() != null)
-                ? saved.getCreatedAt().atZone(BRASILIA_ZONE).toInstant()
-                : Instant.now();
-
-        return new OrderResponse(
-                saved.getId(),
-                saved.getTitle(),
-                saved.getDescription(),
-                saved.getStatus(),
-                catId,
-                category.getName(),
-                client.getId(),
-                client.getName(),
-                scheduledInstant,
-                saved.getLatitude(),
-                saved.getLongitude(),
-                saved.getAddressReference(),
-                0.0,
-                createdInstant
-        );
+        return toOrderResponse(saved);
     }
 
     @Transactional
@@ -114,62 +92,40 @@ public class OrderService {
         orderRepository.save(order);
     }
 
+    @Transactional
+    public void completeOrder(UUID orderId, UUID userId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Pedido não encontrado com o ID: " + orderId));
+
+        if (order.getStatus() != OrderStatus.ACCEPTED) {
+            throw new IllegalStateException("Apenas pedidos em andamento (ACCEPTED) podem ser finalizados.");
+        }
+
+        boolean isClient = order.getClient().getId().equals(userId);
+        boolean isProfessional = order.getProfessional() != null && order.getProfessional().getId().equals(userId);
+
+        if (!isClient && !isProfessional) {
+            throw new IllegalArgumentException("Você não tem permissão para finalizar este pedido.");
+        }
+
+        order.setStatus(OrderStatus.COMPLETED);
+        orderRepository.save(order);
+    }
+
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersByClient(UUID clientId) {
-        List<Order> orders = orderRepository.findByClientIdOrderByCreatedAtDesc(clientId);
-
-        return orders.stream()
-                .map(o -> {
-                    Long catId = (o.getCategory() != null && o.getCategory().getId() != null)
-                            ? o.getCategory().getId().longValue()
-                            : null;
-                    String catName = (o.getCategory() != null) ? o.getCategory().getName() : "Geral";
-
-                    Instant scheduledInstant = (o.getScheduledAt() != null)
-                            ? o.getScheduledAt().atZone(BRASILIA_ZONE).toInstant()
-                            : null;
-
-                    Instant createdInstant = (o.getCreatedAt() != null)
-                            ? o.getCreatedAt().atZone(BRASILIA_ZONE).toInstant()
-                            : Instant.now();
-
-                    return new OrderResponse(
-                            o.getId(),
-                            o.getTitle(),
-                            o.getDescription(),
-                            o.getStatus(),
-                            catId,
-                            catName,
-                            o.getClient().getId(),
-                            o.getClient().getName(),
-                            scheduledInstant,
-                            o.getLatitude(),
-                            o.getLongitude(),
-                            o.getAddressReference(),
-                            0.0,
-                            createdInstant
-                    );
-                })
+        return orderRepository.findByClientIdOrderByCreatedAtDesc(clientId)
+                .stream()
+                .map(this::toOrderResponse)
                 .toList();
     }
 
-    private void validarHorarioComercial(Instant scheduledAt) {
-        ZonedDateTime dataHoraBrasilia = scheduledAt.atZone(BRASILIA_ZONE);
-        ZonedDateTime agoraBrasilia = ZonedDateTime.now(BRASILIA_ZONE);
-
-        if (dataHoraBrasilia.isBefore(agoraBrasilia)) {
-            throw new IllegalArgumentException("O agendamento não pode ser para uma data retroativa.");
-        }
-
-        DayOfWeek dia = dataHoraBrasilia.getDayOfWeek();
-        if (dia == DayOfWeek.SATURDAY || dia == DayOfWeek.SUNDAY) {
-            throw new IllegalArgumentException("Agendamentos são restritos a dias úteis (segunda a sexta-feira).");
-        }
-
-        LocalTime hora = dataHoraBrasilia.toLocalTime();
-        if (hora.isBefore(INICIO_EXPEDIENTE) || hora.isAfter(FIM_EXPEDIENTE)) {
-            throw new IllegalArgumentException("Agendamentos permitidos apenas em horário comercial (08:00 às 18:00).");
-        }
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getOrdersByProfessional(UUID professionalId) {
+        return orderRepository.findByProfessionalIdOrderByCreatedAtDesc(professionalId)
+                .stream()
+                .map(this::toOrderResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -191,8 +147,66 @@ public class OrderService {
                         p.getLongitude(),
                         p.getAddressReference(),
                         p.getDistanceKm(),
-                        p.getCreatedAt()
+                        p.getCreatedAt(),
+                        null,
+                        false
                 ))
                 .toList();
+    }
+
+    private OrderResponse toOrderResponse(Order o) {
+        Long catId = (o.getCategory() != null && o.getCategory().getId() != null)
+                ? o.getCategory().getId().longValue()
+                : null;
+        String catName = (o.getCategory() != null) ? o.getCategory().getName() : "Geral";
+
+        Instant scheduledInstant = (o.getScheduledAt() != null)
+                ? o.getScheduledAt().atZone(BRASILIA_ZONE).toInstant()
+                : null;
+
+        Instant createdInstant = (o.getCreatedAt() != null)
+                ? o.getCreatedAt().atZone(BRASILIA_ZONE).toInstant()
+                : Instant.now();
+
+        String profName = (o.getProfessional() != null) ? o.getProfessional().getName() : null;
+        boolean alreadyReviewed = reviewRepository.existsByOrderId(o.getId());
+
+        return new OrderResponse(
+                o.getId(),
+                o.getTitle(),
+                o.getDescription(),
+                o.getStatus(),
+                catId,
+                catName,
+                o.getClient().getId(),
+                o.getClient().getName(),
+                scheduledInstant,
+                o.getLatitude(),
+                o.getLongitude(),
+                o.getAddressReference(),
+                0.0,
+                createdInstant,
+                profName,
+                alreadyReviewed
+        );
+    }
+
+    private void validarHorarioComercial(Instant scheduledAt) {
+        ZonedDateTime dataHoraBrasilia = scheduledAt.atZone(BRASILIA_ZONE);
+        ZonedDateTime agoraBrasilia = ZonedDateTime.now(BRASILIA_ZONE);
+
+        if (dataHoraBrasilia.isBefore(agoraBrasilia)) {
+            throw new IllegalArgumentException("O agendamento não pode ser para uma data retroativa.");
+        }
+
+        DayOfWeek dia = dataHoraBrasilia.getDayOfWeek();
+        if (dia == DayOfWeek.SATURDAY || dia == DayOfWeek.SUNDAY) {
+            throw new IllegalArgumentException("Agendamentos são restritos a dias úteis (segunda a sexta-feira).");
+        }
+
+        LocalTime hora = dataHoraBrasilia.toLocalTime();
+        if (hora.isBefore(INICIO_EXPEDIENTE) || hora.isAfter(FIM_EXPEDIENTE)) {
+            throw new IllegalArgumentException("Agendamentos permitidos apenas em horário comercial (08:00 às 18:00).");
+        }
     }
 }

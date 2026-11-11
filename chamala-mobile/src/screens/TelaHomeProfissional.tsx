@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  Platform,
   Alert,
   RefreshControl,
   TouchableOpacity,
@@ -32,53 +33,66 @@ export interface OrderItem {
   longitude: number;
   description?: string;
   categoryName?: string;
-  status?: string;
+  status?: 'OPEN' | 'ACCEPTED' | 'COMPLETED' | string;
   scheduledAt?: string;
 }
+
+const exibirAlerta = (titulo: string, mensagem: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${titulo}: ${mensagem}`);
+  } else {
+    Alert.alert(titulo, mensagem);
+  }
+};
 
 export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
   onNavigateToOrderDetails,
 }) => {
   const [isAvailable, setIsAvailable] = useState(true);
-  const [selectedTab, setSelectedTab] = useState<'disponiveis' | 'em_andamento'>('disponiveis');
+  const [selectedTab, setSelectedTab] = useState<'disponiveis' | 'em_andamento' | 'historico'>('disponiveis');
 
   const [availableOrders, setAvailableOrders] = useState<OrderItem[]>([]);
-  const [inProgressOrders, setInProgressOrders] = useState<OrderItem[]>([]);
+  const [myOrders, setMyOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  const formatarPedido = (p: any): OrderItem => ({
+    id: String(p.id),
+    title: p.title || 'Sem título',
+    clientName: p.clientName || 'Cliente',
+    addressReference: p.addressReference || 'Localização no mapa',
+    distanceKm: typeof p.distanceKm === 'number' ? p.distanceKm : 0,
+    latitude: typeof p.latitude === 'number' ? p.latitude : -7.9408,
+    longitude: typeof p.longitude === 'number' ? p.longitude : -34.8728,
+    description: p.description,
+    categoryName: p.categoryName,
+    status: p.status || 'OPEN',
+    scheduledAt: p.scheduledAt,
+  });
+
   const carregarPedidos = useCallback(async () => {
     try {
-      // Coordenadas padrão da base de atuação
       const lat = -7.9408;
       const lon = -34.8728;
 
-      const response = await api.get('/api/v1/orders/nearby', {
-        params: {
-          lat,
-          lon,
-          closestFirst: true,
-        },
+      const userJson = await AsyncStorage.getItem('@chamala:user');
+      const user = userJson ? JSON.parse(userJson) : null;
+
+      const nearbyPromise = api.get('/api/v1/orders/nearby', {
+        params: { lat, lon, closestFirst: true },
       });
 
-      const pedidosFormatados: OrderItem[] = (response.data || []).map((p: any) => ({
-        id: String(p.id),
-        title: p.title || 'Sem título',
-        clientName: p.clientName || 'Cliente',
-        addressReference: p.addressReference || 'Localização no mapa',
-        distanceKm: typeof p.distanceKm === 'number' ? p.distanceKm : 0,
-        latitude: typeof p.latitude === 'number' ? p.latitude : -7.9408,
-        longitude: typeof p.longitude === 'number' ? p.longitude : -34.8728,
-        description: p.description,
-        categoryName: p.categoryName,
-        status: p.status,
-        scheduledAt: p.scheduledAt,
-      }));
+      const profPromise = user?.id
+        ? api.get('/api/v1/orders/professional', { params: { professionalId: user.id } })
+        : Promise.resolve({ data: [] });
 
-      setAvailableOrders(pedidosFormatados);
+      const [nearbyRes, profRes] = await Promise.all([nearbyPromise, profPromise]);
+
+      setAvailableOrders((nearbyRes.data || []).map(formatarPedido));
+      setMyOrders((profRes.data || []).map(formatarPedido));
     } catch (err: any) {
-      console.warn('Erro ao carregar chamados disponíveis:', err?.message);
+      console.warn('Erro ao carregar chamados do profissional:', err?.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -97,7 +111,7 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
       const user = userJson ? JSON.parse(userJson) : null;
 
       if (!user?.id) {
-        Alert.alert('Erro', 'Identificação do profissional não encontrada. Faça login novamente.');
+        exibirAlerta('Erro', 'Identificação do profissional não encontrada. Faça login novamente.');
         return;
       }
 
@@ -106,18 +120,25 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
       });
 
       setAvailableOrders((prev) => prev.filter((item) => item.id !== order.id));
-      setInProgressOrders((prev) => [{ ...order, status: 'ACCEPTED' }, ...prev]);
+      setMyOrders((prev) => [{ ...order, status: 'ACCEPTED' }, ...prev]);
 
-      Alert.alert('Sucesso', 'Pedido aceito! O status agora é Aceito (ACCEPTED).');
+      exibirAlerta('Sucesso', 'Pedido aceito! Ele agora está na sua aba Ativos.');
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Falha ao aceitar pedido.';
-      Alert.alert('Aviso', msg);
+      exibirAlerta('Aviso', msg);
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const handleRecusarPedido = (orderId: string) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Deseja dispensar este chamado da sua lista?')) {
+        setAvailableOrders((prev) => prev.filter((item) => item.id !== orderId));
+      }
+      return;
+    }
+
     Alert.alert(
       'Recusar Chamado',
       'Deseja dispensar este chamado da sua lista?',
@@ -134,7 +155,72 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
     );
   };
 
-  const ordersToDisplay = selectedTab === 'disponiveis' ? availableOrders : inProgressOrders;
+  const executarFinalizacao = async (order: OrderItem) => {
+    try {
+      setActionLoadingId(order.id);
+
+      const userJson = await AsyncStorage.getItem('@chamala:user');
+      const user = userJson ? JSON.parse(userJson) : null;
+
+      if (!user?.id) {
+        exibirAlerta('Erro', 'Usuário não identificado. Faça login novamente.');
+        return;
+      }
+
+      await api.post(`/api/v1/orders/${order.id}/complete`, {
+        userId: user.id,
+      });
+
+      setMyOrders((prev) =>
+        prev.map((item) =>
+          item.id === order.id ? { ...item, status: 'COMPLETED' } : item
+        )
+      );
+
+      exibirAlerta('Concluído', 'Atendimento finalizado e movido para o Histórico!');
+    } catch (err: any) {
+      console.error('Erro ao finalizar pedido:', err?.response?.data || err?.message);
+      const errMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Falha ao finalizar pedido.';
+      exibirAlerta('Aviso', errMsg);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleFinalizarPedido = (order: OrderItem) => {
+    if (Platform.OS === 'web') {
+      const confirmado = window.confirm('Confirmar que este atendimento foi concluído?');
+      if (confirmado) {
+        executarFinalizacao(order);
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Finalizar Serviço',
+      'Confirmar que este atendimento foi concluído?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Finalizar',
+          onPress: () => executarFinalizacao(order),
+        },
+      ]
+    );
+  };
+
+  const inProgressOrders = myOrders.filter((o) => o.status === 'ACCEPTED');
+  const completedOrders = myOrders.filter((o) => o.status === 'COMPLETED');
+
+  const ordersToDisplay =
+    selectedTab === 'disponiveis'
+      ? availableOrders
+      : selectedTab === 'em_andamento'
+      ? inProgressOrders
+      : completedOrders;
 
   return (
     <ScrollView
@@ -180,29 +266,41 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
             value={String(inProgressOrders.length)}
           />
         </View>
+        <View style={styles.statWrapper}>
+          <StatCard
+            emoji="✅"
+            label="Concluídos"
+            value={String(completedOrders.length)}
+          />
+        </View>
       </View>
 
       <Tabs
         tabs={[
-          { key: 'disponiveis', label: `Disponíveis (${availableOrders.length})` },
-          { key: 'em_andamento', label: `Em Andamento (${inProgressOrders.length})` },
+          { key: 'disponiveis', label: `Novos (${availableOrders.length})` },
+          { key: 'em_andamento', label: `Ativos (${inProgressOrders.length})` },
+          { key: 'historico', label: `Histórico (${completedOrders.length})` },
         ]}
         activeKey={selectedTab}
-        onChange={(key: string) => setSelectedTab(key as 'disponiveis' | 'em_andamento')}
+        onChange={(key: string) =>
+          setSelectedTab(key as 'disponiveis' | 'em_andamento' | 'historico')
+        }
       />
 
       <View style={styles.ordersSection}>
         {loading ? (
           <View style={styles.feedbackContainer}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.feedbackText}>Buscando pedidos...</Text>
+            <Text style={styles.feedbackText}>Buscando chamados...</Text>
           </View>
         ) : ordersToDisplay.length === 0 ? (
           <View style={styles.feedbackContainer}>
             <Text style={styles.emptyTitle}>
               {selectedTab === 'disponiveis'
                 ? 'Nenhum chamado aberto na região'
-                : 'Nenhum serviço aceito em andamento'}
+                : selectedTab === 'em_andamento'
+                ? 'Nenhum serviço em andamento'
+                : 'Nenhum atendimento concluído ainda'}
             </Text>
             <Text style={styles.feedbackText}>Puxe para baixo para atualizar a lista.</Text>
           </View>
@@ -240,6 +338,28 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
                         <Text style={styles.btnAcceptText}>Aceitar Pedido</Text>
                       )}
                     </TouchableOpacity>
+                  </View>
+                )}
+
+                {selectedTab === 'em_andamento' && (
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.btnComplete]}
+                      onPress={() => handleFinalizarPedido(demand)}
+                      disabled={isProcessing}
+                    >
+                      {isProcessing ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.btnAcceptText}>Finalizar Atendimento</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {selectedTab === 'historico' && (
+                  <View style={styles.completedBanner}>
+                    <Text style={styles.completedBannerText}>✓ Serviço Finalizado</Text>
                   </View>
                 )}
               </View>
@@ -323,10 +443,26 @@ const styles = StyleSheet.create({
   btnAccept: {
     backgroundColor: colors.primary,
   },
+  btnComplete: {
+    backgroundColor: '#16A34A',
+  },
   btnAcceptText: {
     ...typography.caption,
     fontWeight: '700',
     color: '#fff',
+  },
+  completedBanner: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.background,
+    alignItems: 'flex-end',
+  },
+  completedBannerText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: '#16A34A',
   },
   feedbackContainer: {
     paddingVertical: spacing.xxl,
@@ -337,9 +473,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     ...typography.subtitle,
     color: colors.text,
+    textAlign: 'center',
   },
   feedbackText: {
     ...typography.caption,
     color: colors.textMuted,
+    textAlign: 'center',
   },
 });

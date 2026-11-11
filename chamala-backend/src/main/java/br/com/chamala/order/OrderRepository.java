@@ -53,4 +53,6 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     );
 
     List<Order> findByClientIdOrderByCreatedAtDesc(UUID clientId);
+
+    List<Order> findByProfessionalIdOrderByCreatedAtDesc(UUID professionalId);
 }

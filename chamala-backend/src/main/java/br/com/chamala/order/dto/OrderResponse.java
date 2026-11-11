@@ -18,5 +18,7 @@ public record OrderResponse(
     Double longitude,
     String addressReference,
     Double distanceKm,
-    Instant createdAt
+    Instant createdAt,
+    String professionalName,
+    boolean reviewed
 ) {}
