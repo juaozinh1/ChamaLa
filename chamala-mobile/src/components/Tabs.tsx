@@ -1,6 +1,7 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, minTouchTarget, radius, spacing, typography } from '../theme';
+import { Pressable, View } from 'react-native';
+import { Text } from './Text';
+import { minTouchTarget, radius, spacing, typography } from '../theme';
+import { makeStyles } from '../theme/dynamic';
 
 export type TabItem = { key: string; label: string };
 
@@ -15,6 +16,7 @@ const HEIGHT = 36;
 const SLOP = (minTouchTarget - HEIGHT) / 2;
 
 export function Tabs({ tabs, activeKey, onChange }: TabsProps) {
+  const styles = useStyles();
   return (
     <View style={styles.container} accessibilityRole="tablist">
       {tabs.map((tab) => {
@@ -36,7 +38,7 @@ export function Tabs({ tabs, activeKey, onChange }: TabsProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: {
     flexDirection: 'row',
     padding: spacing.xs,
@@ -55,4 +57,4 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: colors.primary },
   text: { ...typography.body, fontWeight: '600', color: colors.textMuted },
   textActive: { color: colors.surface, fontWeight: '700' },
-});
+}));

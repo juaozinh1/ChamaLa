@@ -1,6 +1,8 @@
-import React from 'react';
-import { StyleSheet, Text, TextInput, TextInputProps, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { TextInput, TextInputProps, View } from 'react-native';
+import { Text } from './Text';
+import { useTextScale } from '../contexts/AccessibilityContext';
+import { radius, spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
 type TextAreaProps = Omit<TextInputProps, 'multiline'> & {
   label?: string;
@@ -19,7 +21,10 @@ export function TextArea({
   style,
   ...rest
 }: TextAreaProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const length = value?.length ?? 0;
+  const scale = useTextScale();
 
   return (
     <View style={styles.container}>
@@ -31,7 +36,12 @@ export function TextArea({
         placeholderTextColor={colors.textMuted}
         maxLength={maxLength}
         value={value}
-        style={[styles.input, { minHeight }, error ? styles.inputError : null, style]}
+        style={[
+          styles.input,
+          { minHeight, fontSize: typography.body.fontSize * scale },
+          error ? styles.inputError : null,
+          style,
+        ]}
         {...rest}
       />
       <View style={styles.footer}>
@@ -46,7 +56,7 @@ export function TextArea({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: { marginBottom: spacing.lg },
   label: {
     ...typography.body,
@@ -71,4 +81,4 @@ const styles = StyleSheet.create({
   },
   error: { ...typography.caption, color: colors.danger, flexShrink: 1 },
   counter: { ...typography.caption, color: colors.textMuted },
-});
+}));

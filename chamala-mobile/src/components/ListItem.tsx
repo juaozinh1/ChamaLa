@@ -1,7 +1,9 @@
-import React, { ReactNode } from 'react';
-import { Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { ReactNode } from 'react';
+import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
+import { Text } from './Text';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, minTouchTarget, radius, spacing, typography } from '../theme';
+import { minTouchTarget, radius, spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
 type ListItemProps = {
   title: string;
@@ -31,6 +33,8 @@ export function ListItem({
   variant = 'card',
   style,
 }: ListItemProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const chevron = showChevron ?? Boolean(onPress);
   const leading = left ?? (emoji ? <Text style={styles.emoji}>{emoji}</Text> : null);
 
@@ -79,7 +83,7 @@ export function ListItem({
   return <View style={[rowStyle, style]}>{content}</View>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: {
     minHeight: minTouchTarget + spacing.md,
     flexDirection: 'row',
@@ -100,4 +104,4 @@ const styles = StyleSheet.create({
   right: { marginLeft: spacing.md, marginRight: spacing.xs },
   title: { ...typography.body, color: colors.text },
   subtitle: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-});
+}));

@@ -1,6 +1,8 @@
-import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme';
+import React, { useEffect, useState } from 'react';
+import { Image, View } from 'react-native';
+import { Text } from './Text';
+
+import { makeStyles } from '../theme/dynamic';
 
 type AvatarProps = {
   name?: string;
@@ -14,6 +16,9 @@ type AvatarProps = {
 };
 
 export function Avatar({ name = '', uri, emoji, size = 56, indicatorColor }: AvatarProps) {
+  const styles = useStyles();
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [uri]);
   const round = { width: size, height: size, borderRadius: size / 2 };
   const dot = Math.max(10, Math.round(size * 0.2));
 
@@ -23,8 +28,8 @@ export function Avatar({ name = '', uri, emoji, size = 56, indicatorColor }: Ava
       accessibilityRole="image"
       accessibilityLabel={name ? `Foto de ${name}` : 'Foto de perfil'}
     >
-      {uri ? (
-        <Image source={{ uri }} style={round} />
+      {uri && !failed ? (
+        <Image source={{ uri }} style={round} onError={() => setFailed(true)} />
       ) : emoji ? (
         <View style={[round, styles.center, styles.emojiBg]}>
           <Text style={{ fontSize: size * 0.5 }}>{emoji}</Text>
@@ -53,7 +58,7 @@ export function Avatar({ name = '', uri, emoji, size = 56, indicatorColor }: Ava
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   center: { alignItems: 'center', justifyContent: 'center' },
   emojiBg: { backgroundColor: colors.infoBg },
   initialBg: { backgroundColor: colors.primary },
@@ -65,4 +70,4 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.background,
   },
-});
+}));

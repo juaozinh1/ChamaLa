@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   FlatList,
   Modal,
   Pressable,
-  StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from './Text';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, minTouchTarget, radius, spacing, typography } from '../theme';
+import { minTouchTarget, radius, spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
 export type SelectOption = { label: string; value: string };
 
@@ -29,6 +29,8 @@ export function Select({
   onChange,
   error,
 }: SelectProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 
@@ -93,7 +95,7 @@ export function Select({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: { marginBottom: spacing.lg },
   label: {
     ...typography.body,
@@ -139,4 +141,4 @@ const styles = StyleSheet.create({
   optionText: { ...typography.body, color: colors.text },
   optionSelected: { fontWeight: '700', color: colors.primary },
   separator: { height: 1, backgroundColor: colors.border },
-});
+}));

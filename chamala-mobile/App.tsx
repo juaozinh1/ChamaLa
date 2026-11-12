@@ -1,13 +1,18 @@
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ComponentShowcase } from './src/screens/ComponentShowcase';
+import { AccessibilityProvider } from './src/contexts/AccessibilityContext';
+import { AuthProvider } from './src/contexts/AuthContext';
+import { RootNavigator } from './src/navigation/RootNavigator';
 
-// TEMPORÁRIO: mostra a tela de teste dos componentes. Será trocado pelo RootNavigator (FRONT-04).
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      <ComponentShowcase />
+      <AccessibilityProvider>
+        <AuthProvider>
+          <StatusBar style="dark" />
+          <RootNavigator />
+        </AuthProvider>
+      </AccessibilityProvider>
     </SafeAreaProvider>
   );
 }

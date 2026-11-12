@@ -3,11 +3,11 @@ import {
   ActivityIndicator,
   Pressable,
   StyleProp,
-  StyleSheet,
-  Text,
   ViewStyle,
 } from 'react-native';
-import { colors, minTouchTarget, radius, spacing, typography } from '../theme';
+import { Text } from './Text';
+import { Colors, minTouchTarget, radius, spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
 export type ButtonVariant =
   | 'primary' // azul-marinho sólido: ação principal
@@ -33,13 +33,10 @@ type ButtonProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-// Borda rosada do botão "Cancelar" no Figma.
-const DANGER_BORDER = '#EDB9B6';
-
-const variants: Record<
+const getVariants = (colors: Colors): Record<
   ButtonVariant,
   { container: ViewStyle; text: string; underline?: boolean }
-> = {
+> => ({
   primary: { container: { backgroundColor: colors.primary }, text: colors.surface },
   outline: {
     container: {
@@ -54,7 +51,7 @@ const variants: Record<
     container: {
       backgroundColor: colors.surface,
       borderWidth: 1.5,
-      borderColor: DANGER_BORDER,
+      borderColor: colors.dangerBorder,
     },
     text: colors.danger,
   },
@@ -76,7 +73,7 @@ const variants: Record<
     text: colors.primary,
   },
   link: { container: { backgroundColor: 'transparent' }, text: colors.textMuted, underline: true },
-};
+});
 
 // Botões pequenos têm 36 de altura visual; o hitSlop completa os 44 do RNF07.
 const SM_HEIGHT = 36;
@@ -92,8 +89,10 @@ export function Button({
   fullWidth = true,
   style,
 }: ButtonProps) {
+  const styles = useStyles();
   const isDisabled = disabled || loading;
-  const { container, text, underline } = variants[variant];
+  const colors = useColors();
+  const { container, text, underline } = getVariants(colors)[variant];
   const isLink = variant === 'link';
   const small = size === 'sm' && !isLink;
 
@@ -134,7 +133,7 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -148,4 +147,4 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.5 },
   textSm: { fontSize: 14 },
   underline: { textDecorationLine: 'underline', fontWeight: '400' },
-});
+}));

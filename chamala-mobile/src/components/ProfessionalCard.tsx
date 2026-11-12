@@ -1,9 +1,10 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from './Text';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { Avatar } from './Avatar';
-import { colors, radius, spacing, typography } from '../theme';
+import { radius, spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
 type ProfessionalCardProps = {
   name: string;
@@ -36,6 +37,8 @@ export function ProfessionalCard({
   verified = false,
   onPress,
 }: ProfessionalCardProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const label = [
     name,
     profession,
@@ -96,7 +99,7 @@ export function ProfessionalCard({
 
 const AVATAR = 56;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', alignItems: 'center' },
   body: { flex: 1, marginLeft: spacing.lg },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -126,4 +129,4 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.sm,
     backgroundColor: colors.border,
   },
-});
+}));

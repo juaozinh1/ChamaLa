@@ -1,7 +1,8 @@
-import React from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { Switch, View } from 'react-native';
+import { Text } from './Text';
 import { Card } from './Card';
-import { colors, spacing, typography } from '../theme';
+import { spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
 type SwitchRowProps = {
   title: string;
@@ -12,6 +13,8 @@ type SwitchRowProps = {
 
 // Ex.: "Disponível para serviços — Você está visível para novos clientes".
 export function SwitchRow({ title, subtitle, value, onValueChange }: SwitchRowProps) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <Card>
       <View style={styles.row}>
@@ -32,9 +35,9 @@ export function SwitchRow({ title, subtitle, value, onValueChange }: SwitchRowPr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', alignItems: 'center' },
   body: { flex: 1, marginRight: spacing.md },
   title: { ...typography.subtitle, fontSize: 17, fontWeight: '700', color: colors.text },
   subtitle: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-});
+}));

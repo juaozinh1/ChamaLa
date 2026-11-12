@@ -1,6 +1,7 @@
-import React from 'react';
-import { Pressable, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
-import { colors, minTouchTarget, radius, spacing, typography } from '../theme';
+import { Pressable, StyleProp, ViewStyle } from 'react-native';
+import { Text } from './Text';
+import { minTouchTarget, radius, spacing, typography } from '../theme';
+import { makeStyles } from '../theme/dynamic';
 
 type ChipProps = {
   label: string;
@@ -22,6 +23,7 @@ export function Chip({
   shape = 'pill',
   style,
 }: ChipProps) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -41,7 +43,7 @@ export function Chip({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   chip: {
     minHeight: HEIGHT,
     alignItems: 'center',
@@ -57,4 +59,4 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
   text: { ...typography.caption, fontSize: 14, fontWeight: '500', color: colors.text },
   textSelected: { color: colors.surface, fontWeight: '600' },
-});
+}));

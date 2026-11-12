@@ -1,6 +1,7 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { View } from 'react-native';
+import { Text } from './Text';
+import { radius, spacing, typography } from '../theme';
+import { makeStyles } from '../theme/dynamic';
 
 type ProgressStepsProps = {
   /** Nomes das etapas, na ordem. Ex.: ['Criação de Conta', 'Verificação'] */
@@ -11,6 +12,7 @@ type ProgressStepsProps = {
 
 // Uma barra por etapa + "Etapa X de N" à esquerda e o nome da etapa à direita.
 export function ProgressSteps({ steps, currentStep }: ProgressStepsProps) {
+  const styles = useStyles();
   const current = steps[currentStep] ?? '';
 
   return (
@@ -38,7 +40,7 @@ export function ProgressSteps({ steps, currentStep }: ProgressStepsProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   bars: { flexDirection: 'row', gap: spacing.sm },
   bar: {
     flex: 1,
@@ -54,4 +56,4 @@ const styles = StyleSheet.create({
   },
   step: { ...typography.caption, fontWeight: '700', color: colors.primary },
   name: { ...typography.caption, color: colors.textMuted },
-});
+}));

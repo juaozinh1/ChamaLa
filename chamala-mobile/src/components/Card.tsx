@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
-import { Pressable, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { colors, radius, spacing } from '../theme';
+import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
+import { radius, spacing } from '../theme';
+import { makeStyles } from '../theme/dynamic';
 
 type CardProps = {
   children: ReactNode;
@@ -11,7 +12,7 @@ type CardProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-// Cartão plano, só com borda, como no Figma.
+// Cartão plano, só com borda.
 export function Card({
   children,
   onPress,
@@ -19,6 +20,7 @@ export function Card({
   accessibilityLabel,
   style,
 }: CardProps) {
+  const styles = useStyles();
   if (onPress) {
     return (
       <Pressable
@@ -47,7 +49,7 @@ export function Card({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -56,4 +58,4 @@ const styles = StyleSheet.create({
   },
   padded: { padding: spacing.lg },
   pressed: { opacity: 0.9 },
-});
+}));

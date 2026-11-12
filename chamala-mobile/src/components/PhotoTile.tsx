@@ -1,18 +1,23 @@
-import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
+import { Text } from './Text';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing, typography } from '../theme';
+import { radius, spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
 type PhotoTileProps = {
   /** Foto escolhida. Sem ela, mostra o quadrado "+ Adicionar". */
   uri?: string;
   size?: number;
+  /** Texto do quadrado vazio. Padrão: "Adicionar". */
+  label?: string;
   onPress?: () => void;
   onRemove?: () => void;
 };
 
 // Fotos de trabalhos anteriores (até 6): monte a grade na tela com flexWrap + gap.
-export function PhotoTile({ uri, size = 96, onPress, onRemove }: PhotoTileProps) {
+export function PhotoTile({ uri, size = 96, label = 'Adicionar', onPress, onRemove }: PhotoTileProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const box = { width: size, height: size };
 
   if (uri) {
@@ -41,17 +46,17 @@ export function PhotoTile({ uri, size = 96, onPress, onRemove }: PhotoTileProps)
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Adicionar foto"
+      accessibilityLabel={`${label} foto`}
       onPress={onPress}
       style={({ pressed }) => [box, styles.add, pressed && styles.pressed]}
     >
       <Ionicons name="add" size={28} color={colors.textMuted} />
-      <Text style={styles.addText}>Adicionar</Text>
+      <Text style={styles.addText}>{label}</Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   image: { borderRadius: radius.lg },
   remove: {
     position: 'absolute',
@@ -71,4 +76,4 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.85 },
   addText: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
-});
+}));

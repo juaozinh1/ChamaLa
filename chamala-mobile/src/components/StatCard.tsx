@@ -1,7 +1,8 @@
-import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import {  } from 'react-native';
+import { Text } from './Text';
 import { Card } from './Card';
-import { colors, spacing, typography } from '../theme';
+import { spacing, typography } from '../theme';
+import { makeStyles } from '../theme/dynamic';
 
 type StatCardProps = {
   emoji: string;
@@ -13,6 +14,7 @@ type StatCardProps = {
 
 // Três cards destes lado a lado formam a linha de métricas do Painel.
 export function StatCard({ emoji, value, label }: StatCardProps) {
+  const styles = useStyles();
   return (
     <Card
       padded={false}
@@ -26,7 +28,7 @@ export function StatCard({ emoji, value, label }: StatCardProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: {
     flex: 1,
     alignItems: 'center',
@@ -36,4 +38,4 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 26, marginBottom: spacing.sm },
   value: { ...typography.subtitle, fontWeight: '700', color: colors.text },
   label: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-});
+}));

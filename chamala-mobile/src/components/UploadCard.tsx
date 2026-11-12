@@ -1,8 +1,9 @@
-import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Text } from './Text';
 import { Ionicons } from '@expo/vector-icons';
 import type { IoniconName } from './icon';
-import { colors, minTouchTarget, radius, spacing, typography } from '../theme';
+import { minTouchTarget, radius, spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
 type UploadCardProps = {
   title: string;
@@ -34,6 +35,8 @@ export function UploadCard({
   onPick,
   onRemove,
 }: UploadCardProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const hasFile = Boolean(fileName);
   const canRemove = hasFile && Boolean(onRemove);
   const subtitle = hasFile
@@ -112,7 +115,7 @@ export function UploadCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   compactWrapper: { flex: 1 },
   card: {
     flexDirection: 'row',
@@ -161,4 +164,4 @@ const styles = StyleSheet.create({
     marginRight: spacing.xs,
   },
   error: { ...typography.caption, color: colors.danger, marginTop: spacing.xs },
-});
+}));

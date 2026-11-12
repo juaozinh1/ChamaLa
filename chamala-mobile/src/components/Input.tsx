@@ -1,33 +1,36 @@
-import React, { forwardRef, useState } from 'react';
-import {
-  StyleProp,
-  StyleSheet,
-  Text,
-  TextInput,
-  TextInputProps,
-  View,
-  ViewStyle,
-} from 'react-native';
+import { ComponentRef, forwardRef, useState } from 'react';
+import { StyleProp, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
+import { Text } from './Text';
 import { Ionicons } from '@expo/vector-icons';
 import type { IoniconName } from './icon';
-import { colors, radius, spacing, typography } from '../theme';
+import { useTextScale } from '../contexts/AccessibilityContext';
+import { radius, spacing, typography } from '../theme';
+import { makeStyles, useColors } from '../theme/dynamic';
 
-type InputProps = TextInputProps & {
+/** Tipo do ref do TextInput. Derivado do componente para funcionar em qualquer versão do React Native. */
+export type TextInputRef = ComponentRef<typeof TextInput>;
+
+export type InputProps = TextInputProps & {
   label?: string;
   error?: string;
   helperText?: string;
   /** Ícone à esquerda (ex.: 'search-outline'). */
   leftIcon?: IoniconName;
+  /** Texto fixo à direita, como unidade (ex.: "horas", "%"). */
+  rightText?: string;
   /** Estilo do contêiner. O padrão deixa 16 de espaço embaixo; use { marginBottom: 0 } para remover. */
   containerStyle?: StyleProp<ViewStyle>;
 };
 
 // forwardRef permite focar o próximo campo: ref.current?.focus() no onSubmitEditing.
-export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, helperText, leftIcon, containerStyle, style, onFocus, onBlur, ...rest },
+export const Input = forwardRef<TextInputRef, InputProps>(function Input(
+  { label, error, helperText, leftIcon, rightText, containerStyle, style, onFocus, onBlur, ...rest },
   ref,
 ) {
+  const styles = useStyles();
+  const colors = useColors();
   const [focused, setFocused] = useState(false);
+  const scale = useTextScale();
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -47,7 +50,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           accessibilityLabel={label}
           accessibilityHint={error ?? helperText}
           placeholderTextColor={colors.textMuted}
-          style={[styles.input, style]}
+          style={[styles.input, { fontSize: typography.body.fontSize * scale }, style]}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -58,6 +61,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           }}
           {...rest}
         />
+        {rightText ? <Text style={styles.rightText}>{rightText}</Text> : null}
       </View>
       {error ? (
         <Text style={styles.error}>{error}</Text>
@@ -68,7 +72,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   );
 });
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: { marginBottom: spacing.lg },
   label: {
     ...typography.body,
@@ -90,6 +94,7 @@ const styles = StyleSheet.create({
   fieldError: { borderColor: colors.danger },
   icon: { marginRight: spacing.sm },
   input: { flex: 1, ...typography.body, color: colors.text, paddingVertical: spacing.sm },
+  rightText: { ...typography.body, color: colors.textMuted, marginLeft: spacing.sm },
   error: { ...typography.caption, color: colors.danger, marginTop: spacing.xs },
   helper: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
-});
+}));
