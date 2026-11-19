@@ -14,7 +14,7 @@ chamala/
 ├── chamala-backend/   API REST Java 25 + Spring Boot 3 + PostGIS
 ├── chamala-admin/     Painel administrativo web (React + Vite + Tailwind)
 ├── docs/              Roadmap
-├── docker-compose.yml PostgreSQL 16 + PostGIS 3.4 local
+├── docker-compose.yml PostGIS local opcional (o banco padrão é o Supabase)
 └── .github/workflows/ CI: lint, tipos, build e testes dos três projetos
 ```
 
@@ -51,14 +51,18 @@ Mudanças feitas sobre essa base:
 
 ## Como rodar
 
-Pré-requisitos: Node.js LTS, Java 25, Maven 3.9+, Docker Desktop, app Expo Go no celular.
+Pré-requisitos: Node.js LTS, Java 25, Maven 3.9+, app Expo Go no celular.
+
+O banco fica no **Supabase** (PostgreSQL + PostGIS). As credenciais ficam em
+`chamala-backend/.env`, que não vai para o git. Peça os valores a quem administra o projeto
+no Supabase.
 
 ```bash
-# 1. Banco
-docker compose up -d
-
-# 2. API (http://localhost:8080/swagger-ui.html)
+# 1. Credenciais do banco
 cd chamala-backend
+copy .env.example .env      # no Windows; preencha DB_URL, DB_USER e DB_PASSWORD
+
+# 2. API (http://localhost:8085/swagger-ui.html) — rode de dentro de chamala-backend
 mvn spring-boot:run
 
 # 3. App mobile
@@ -75,7 +79,11 @@ npm run dev
 ```
 
 No celular físico, troque `EXPO_PUBLIC_API_URL` pelo IP do computador na rede
-(ex.: `http://192.168.0.10:8080`).
+(ex.: `http://192.168.0.10:8085`). No emulador Android, use `http://10.0.2.2:8085`.
+
+Sem internet ou para testar migrações, dá para usar um PostGIS local com Docker:
+`docker compose up -d db` e remova `DB_URL`, `DB_USER` e `DB_PASSWORD` do `.env` e coloque
+`FLYWAY_ENABLED=true` (a API cai no padrão `localhost:5432/chamala`).
 
 ## Padronização e branches
 

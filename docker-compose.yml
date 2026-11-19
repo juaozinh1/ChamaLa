@@ -1,6 +1,7 @@
-# Ambiente local do ChamaLÁ.
-#   docker compose up -d --build   → banco (PostGIS) + API em http://localhost:8080
-#   docker compose up -d db        → só o banco (para rodar a API pelo Maven/IDE)
+# Ambiente local OPCIONAL do ChamaLÁ. O banco padrão é o Supabase (chamala-backend/.env).
+# Use isto só para trabalhar offline ou testar migrações num banco descartável:
+#   docker compose up -d --build   → banco (PostGIS) + API em http://localhost:8085
+#   docker compose up -d db        → só o banco; rode a API sem DB_URL no .env
 services:
   db:
     image: postgis/postgis:16-3.4
@@ -23,9 +24,11 @@ services:
       DB_URL: jdbc:postgresql://db:5432/chamala
       DB_USER: chamala
       DB_PASSWORD: chamala
-      PORT: 8080
+      PORT: 8085
+      # Banco local começa vazio: o Flyway cria as tabelas.
+      FLYWAY_ENABLED: "true"
     ports:
-      - "8080:8080"
+      - "8085:8085"
     depends_on:
       db:
         condition: service_healthy

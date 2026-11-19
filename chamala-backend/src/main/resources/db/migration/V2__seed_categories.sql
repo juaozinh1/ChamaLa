@@ -1,10 +1,9 @@
--- As 8 categorias do protótipo no Figma.
+-- Categorias iniciais, iguais às do Supabase. "icon" é o nome do ícone Ionicons usado no app.
 INSERT INTO categories (id, name, icon, color) VALUES
-    (1, 'Limpeza',    '🧹', '#e8f4fd'),
-    (2, 'Elétrica',   '⚡', '#fff8e1'),
-    (3, 'Hidráulica', '🔧', '#e8f5e9'),
-    (4, 'Pintura',    '🎨', '#fce4ec'),
-    (5, 'Montagem',   '🪑', '#f3e5f5'),
-    (6, 'Jardinagem', '🌿', '#e8f5e9'),
-    (7, 'Reformas',   '🏠', '#fff3e0'),
-    (8, 'Mudança',    '📦', '#e0f2f1');
+    (1, 'Geral',            'construct-outline',     '#2563EB'),
+    (2, 'Limpeza e Faxina', 'sparkles-outline',      '#10B981'),
+    (3, 'Eletricista',      'flash-outline',         '#F59E0B'),
+    (4, 'Encanador',        'water-outline',         '#06B6D4'),
+    (5, 'Pintura',          'color-palette-outline', '#8B5CF6');
+
+SELECT setval('categories_id_seq', (SELECT max(id) FROM categories));

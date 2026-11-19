@@ -1,11 +1,17 @@
 server:
-  port: 8085
+  port: ${PORT:8085}
 
 spring:
+  # Lê chamala-backend/.env (fora do git) quando a API roda a partir dessa pasta.
+  # Variáveis de ambiente do sistema têm prioridade sobre o arquivo.
+  config:
+    import: optional:file:.env[.properties]
+
   datasource:
-    url: jdbc:postgresql://aws-1-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require
-    username: postgres.kogjagvicnbwzigpxzri
-    password: dov1nYkVWTATP1d4
+    # Sem DB_URL, usa o PostGIS local do docker-compose.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/chamala}
+    username: ${DB_USER:chamala}
+    password: ${DB_PASSWORD:chamala}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -17,7 +23,7 @@ spring:
         format_sql: true
 
   flyway:
-    enabled: false
+    enabled: ${FLYWAY_ENABLED:false}
 
 logging:
   level:

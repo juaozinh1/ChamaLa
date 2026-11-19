@@ -16,7 +16,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /** Sobe um PostGIS real (Docker), aplica as migrações e testa o primeiro endpoint. */
-@SpringBootTest
+@SpringBootTest(properties = "spring.flyway.enabled=true")
 @AutoConfigureMockMvc
 @Testcontainers
 class CategoryApiTest {
@@ -30,11 +30,11 @@ class CategoryApiTest {
     MockMvc mvc;
 
     @Test
-    void listaAsOitoCategoriasSemLogin() throws Exception {
+    void listaAsCategoriasSemLogin() throws Exception {
         mvc.perform(get("/api/v1/categories"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.length()").value(8))
-            .andExpect(jsonPath("$[0].name").value("Limpeza"));
+            .andExpect(jsonPath("$.length()").value(5))
+            .andExpect(jsonPath("$[0].name").value("Geral"));
     }
 
     @Test
