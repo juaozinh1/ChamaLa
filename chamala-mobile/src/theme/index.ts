@@ -13,20 +13,33 @@ export const colors = {
   warningBg: '#FFF8E1', // banner "Pendente"
   danger: '#C62828', // cancelar
   success: '#2E7D32',
-  successBg: '#E8F5E9',            // badge de sucesso
-  dangerBg: '#FDECEA',             // badge de erro/cancelado
-  overlay: 'rgba(0, 0, 0, 0.5)',   // fundo escuro do Select
+  successBg: '#E8F5E9', // badge de sucesso
+  dangerBg: '#FDECEA', // badge de erro/cancelado
+  overlay: 'rgba(0, 0, 0, 0.5)', // fundo escuro do Select
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
+// Cantos do Figma (página Componentes): botões e campos 8, cards 12, folhas 20, chips em pílula.
 export const radius = {
   none: 0,
-  xs: 0,
-  sm: 0,
-  md: 0,
-  lg: 0,
-  full: 0,
+  xs: 4,
+  sm: 6,
+  md: 8,
+  lg: 12,
+  xl: 20,
+  full: 999,
+} as const;
+
+// Sombra leve para cards que "flutuam" sobre o fundo creme.
+export const shadow = {
+  card: {
+    shadowColor: '#1E3A5F',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
 } as const;
 
 export const typography = {

@@ -1,5 +1,6 @@
 import React, { forwardRef, useState } from 'react';
 import {
+  Pressable,
   StyleProp,
   StyleSheet,
   Text,
@@ -19,13 +20,31 @@ type InputProps = TextInputProps & {
   helperText?: string;
   /** Ícone à esquerda (ex.: 'search-outline'). */
   leftIcon?: IoniconName;
+  /** Ícone tocável à direita (ex.: 'eye-outline' para mostrar a senha). */
+  rightIcon?: IoniconName;
+  onRightIconPress?: () => void;
+  /** Texto lido pelo leitor de tela para o ícone da direita. */
+  rightIconLabel?: string;
   /** Estilo do contêiner. O padrão deixa 16 de espaço embaixo; use { marginBottom: 0 } para remover. */
   containerStyle?: StyleProp<ViewStyle>;
 };
 
 // forwardRef permite focar o próximo campo: ref.current?.focus() no onSubmitEditing.
 export const Input = forwardRef<TextInputInstance, InputProps>(function Input(
-  { label, error, helperText, leftIcon, containerStyle, style, onFocus, onBlur, ...rest },
+  {
+    label,
+    error,
+    helperText,
+    leftIcon,
+    rightIcon,
+    onRightIconPress,
+    rightIconLabel,
+    containerStyle,
+    style,
+    onFocus,
+    onBlur,
+    ...rest
+  },
   ref,
 ) {
   const [focused, setFocused] = useState(false);
@@ -41,7 +60,12 @@ export const Input = forwardRef<TextInputInstance, InputProps>(function Input(
         ]}
       >
         {leftIcon ? (
-          <Ionicons name={leftIcon} size={20} color={colors.textMuted} style={styles.icon} />
+          <Ionicons
+            name={leftIcon}
+            size={20}
+            color={colors.textMuted}
+            style={styles.icon}
+          />
         ) : null}
         <TextInput
           ref={ref}
@@ -59,6 +83,17 @@ export const Input = forwardRef<TextInputInstance, InputProps>(function Input(
           }}
           {...rest}
         />
+        {rightIcon ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={rightIconLabel}
+            onPress={onRightIconPress}
+            hitSlop={12}
+            style={styles.rightIcon}
+          >
+            <Ionicons name={rightIcon} size={20} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
       {error ? (
         <Text style={styles.error}>{error}</Text>
@@ -90,6 +125,7 @@ const styles = StyleSheet.create({
   fieldFocused: { borderColor: colors.primary },
   fieldError: { borderColor: colors.danger },
   icon: { marginRight: spacing.sm },
+  rightIcon: { marginLeft: spacing.sm, padding: spacing.xs },
   input: { flex: 1, ...typography.body, color: colors.text, paddingVertical: spacing.sm },
   error: { ...typography.caption, color: colors.danger, marginTop: spacing.xs },
   helper: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },

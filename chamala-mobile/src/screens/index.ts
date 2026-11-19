@@ -4,3 +4,4 @@ export * from './TelaCadastroProfissional';
 export * from './TelaHome';
 export * from './TelaHomeProfissional';
 export * from './TelaCriarPedido';
+export * from './TelaMinhaConta';

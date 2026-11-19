@@ -178,7 +178,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   confirmBtn: {
-    borderRadius: 0,
     minHeight: minTouchTarget,
     paddingHorizontal: spacing.lg,
   },

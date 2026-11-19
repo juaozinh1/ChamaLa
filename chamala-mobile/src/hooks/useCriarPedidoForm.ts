@@ -1,114 +1,136 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
+import { resumoDosErros, type FieldErrors } from './useFieldErrors';
 
 export interface LocationCoords {
   lat: number;
   lng: number;
 }
 
-export function useCriarPedidoForm(currentClientId?: string) {
-  const [categoriaId, setCategoriaId] = useState<string | null>(null);
-  const [descricao, setDescricao] = useState('');
+export type CampoPedido = 'categoria' | 'data' | 'hora' | 'descricao' | 'localizacao';
+
+type Options = {
+  currentClientId?: string;
+  /** Recebe as mensagens de erro (validação, limite de fotos, API) para exibir num toast. */
+  onError?: (message: string) => void;
+};
+
+const DATA_REGEX = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+const HORA_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Agendamento: data futura, em dia útil, entre 08:00 e 18:00. */
+function validarAgendamento(dataBr: string, horaStr: string): FieldErrors<CampoPedido> {
+  const erros: FieldErrors<CampoPedido> = {};
+
+  if (!dataBr) erros.data = 'Informe a data.';
+  else if (!DATA_REGEX.test(dataBr)) erros.data = 'Use o formato DD/MM/AAAA.';
+
+  if (!horaStr) erros.hora = 'Informe o horário.';
+  else if (!HORA_REGEX.test(horaStr)) erros.hora = 'Use o formato HH:MM.';
+
+  if (erros.data || erros.hora) return erros;
+
+  const [, d, m, a] = dataBr.match(DATA_REGEX)!;
+  const dia = Number(d);
+  const mes = Number(m);
+  const ano = Number(a);
+  const [hora, minuto] = horaStr.split(':').map(Number);
+  const alvo = new Date(ano, mes - 1, dia, hora, minuto, 0);
+
+  if (
+    mes < 1 ||
+    mes > 12 ||
+    alvo.getFullYear() !== ano ||
+    alvo.getMonth() !== mes - 1 ||
+    alvo.getDate() !== dia
+  ) {
+    erros.data = 'Essa data não existe no calendário.';
+  } else if (alvo.getTime() <= Date.now()) {
+    erros.data = 'Escolha uma data e horário futuros.';
+  } else if (alvo.getDay() === 0 || alvo.getDay() === 6) {
+    erros.data = 'Atendemos só em dias úteis (segunda a sexta).';
+  }
+
+  const minutos = hora * 60 + minuto;
+  if (minutos < 8 * 60 || minutos > 18 * 60) {
+    erros.hora = 'Escolha um horário entre 08:00 e 18:00.';
+  }
+
+  return erros;
+}
+
+export function useCriarPedidoForm({ currentClientId, onError }: Options = {}) {
+  const [categoriaId, setCategoriaIdState] = useState<string | null>(null);
+  const [descricao, setDescricaoState] = useState('');
   const [fotos, setFotos] = useState<string[]>([]);
-  const [localizacao, setLocalizacao] = useState<LocationCoords | null>(null);
+  const [localizacao, setLocalizacaoState] = useState<LocationCoords | null>(null);
 
   // Agendamento obrigatório no padrão DD/MM/AAAA e HH:MM
-  const [dataAgendada, setDataAgendada] = useState(''); // Ex: 12/11/2026
-  const [horaAgendada, setHoraAgendada] = useState(''); // Ex: 10:30
+  const [dataAgendada, setDataAgendadaState] = useState(''); // Ex: 12/11/2026
+  const [horaAgendada, setHoraAgendadaState] = useState(''); // Ex: 10:30
 
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<CampoPedido>>({});
+
+  const clearFieldError = useCallback((campo: CampoPedido) => {
+    setFieldErrors((prev) => (prev[campo] ? { ...prev, [campo]: undefined } : prev));
+  }, []);
+
+  // Cada setter tira o realce do próprio campo quando a pessoa corrige.
+  const setCategoriaId = (v: string | null) => {
+    setCategoriaIdState(v);
+    clearFieldError('categoria');
+  };
+  const setDescricao = (v: string) => {
+    setDescricaoState(v);
+    clearFieldError('descricao');
+  };
+  const setLocalizacao = (v: LocationCoords | null) => {
+    setLocalizacaoState(v);
+    clearFieldError('localizacao');
+  };
+  const setDataAgendada = (v: string) => {
+    setDataAgendadaState(v);
+    clearFieldError('data');
+  };
+  const setHoraAgendada = (v: string) => {
+    setHoraAgendadaState(v);
+    clearFieldError('hora');
+  };
 
   const handleAddPhoto = (uri: string) => {
     if (fotos.length >= 5) {
-      setError('Limite máximo de 5 fotos atingido.');
+      onError?.('Limite máximo de 5 fotos atingido.');
       return;
     }
     setFotos((prev) => [...prev, uri]);
-    setError(null);
   };
 
   const handleRemovePhoto = (index: number) => {
     setFotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const validarHorarioComercial = (dataBr: string, horaStr: string): string | null => {
-    const dataRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-    const horaRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-    if (!dataRegex.test(dataBr) || !horaRegex.test(horaStr)) {
-      return 'Formato inválido. Use DD/MM/AAAA para data e HH:MM para horário (ex: 12/11/2026 e 10:30).';
-    }
-
-    const matchData = dataBr.match(dataRegex)!;
-    const dia = Number(matchData[1]);
-    const mes = Number(matchData[2]);
-    const ano = Number(matchData[3]);
-
-    const [hora, minuto] = horaStr.split(':').map(Number);
-
-    if (mes < 1 || mes > 12 || dia < 1 || dia > 31) {
-      return 'Data inválida.';
-    }
-
-    const dataHoraAlvo = new Date(ano, mes - 1, dia, hora, minuto, 0);
-
-    if (
-      dataHoraAlvo.getFullYear() !== ano ||
-      dataHoraAlvo.getMonth() !== mes - 1 ||
-      dataHoraAlvo.getDate() !== dia
-    ) {
-      return 'Data informada não existe no calendário.';
-    }
-
-    if (dataHoraAlvo.getTime() <= Date.now()) {
-      return 'O agendamento deve ser para uma data e horário futuros.';
-    }
-
-    // 0 = Domingo, 6 = Sábado
-    const diaSemana = dataHoraAlvo.getDay();
-    if (diaSemana === 0 || diaSemana === 6) {
-      return 'Agendamentos são restritos a dias úteis (segunda a sexta-feira).';
-    }
-
-    // Horário comercial: 08:00 às 18:00
-    const minutosTotais = hora * 60 + minuto;
-    const inicioComercial = 8 * 60; // 08:00
-    const fimComercial = 18 * 60;   // 18:00
-
-    if (minutosTotais < inicioComercial || minutosTotais > fimComercial) {
-      return 'O horário de agendamento deve ser entre 08:00 e 18:00.';
-    }
-
-    return null;
-  };
-
-  const validarFormulario = () => {
-    if (!categoriaId) return 'Selecione uma categoria de serviço.';
-    if (!descricao.trim()) return 'Informe a descrição do serviço.';
-    if (!localizacao) return 'Marque a localização do atendimento no mapa.';
-
-    if (!dataAgendada.trim() || !horaAgendada.trim()) {
-      return 'Informe a data e o horário para o agendamento.';
-    }
-
-    const erroComercial = validarHorarioComercial(dataAgendada.trim(), horaAgendada.trim());
-    if (erroComercial) return erroComercial;
-
-    return null;
-  };
+  const validarFormulario = (): FieldErrors<CampoPedido> => ({
+    ...(categoriaId ? {} : { categoria: 'Selecione uma categoria de serviço.' }),
+    ...validarAgendamento(dataAgendada.trim(), horaAgendada.trim()),
+    ...(descricao.trim() ? {} : { descricao: 'Descreva o serviço que você precisa.' }),
+    ...(localizacao
+      ? {}
+      : { localizacao: 'Toque no mapa para marcar o local do atendimento.' }),
+  });
 
   const handleSubmit = async (onSuccess: () => void) => {
-    const validacao = validarFormulario();
-    if (validacao) {
-      setError(validacao);
+    const erros = validarFormulario();
+    setFieldErrors(erros);
+    const resumo = resumoDosErros(erros);
+    if (resumo) {
+      onError?.(resumo);
       return;
     }
 
     try {
       setSubmitting(true);
-      setError(null);
 
       let resolvedClientId = currentClientId;
 
@@ -121,7 +143,7 @@ export function useCriarPedidoForm(currentClientId?: string) {
       }
 
       if (!resolvedClientId) {
-        setError('Sessão expirada. Faça login novamente.');
+        onError?.('Sessão expirada. Faça login novamente.');
         return;
       }
 
@@ -153,7 +175,7 @@ export function useCriarPedidoForm(currentClientId?: string) {
         err?.response?.data?.message ||
         err?.response?.data?.error ||
         'Falha ao registrar pedido no servidor.';
-      setError(apiMessage);
+      onError?.(apiMessage);
     } finally {
       setSubmitting(false);
     }
@@ -174,7 +196,7 @@ export function useCriarPedidoForm(currentClientId?: string) {
     horaAgendada,
     setHoraAgendada,
     submitting,
-    error,
+    fieldErrors,
     handleSubmit,
   };
 }

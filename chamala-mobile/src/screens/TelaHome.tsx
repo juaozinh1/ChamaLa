@@ -10,13 +10,14 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, spacing, typography, minTouchTarget } from '../theme';
+import { colors, spacing, typography, minTouchTarget, radius } from '../theme';
 import { Button } from '../components/Button';
 import { SearchInput } from '../components/SearchInput';
 import { Chip } from '../components/Chip';
 import { Tabs } from '../components/Tabs';
 import { OrderCard } from '../components/OrderCard';
 import { ReviewModal } from '../components/ReviewModal';
+import { AccountButton } from '../components/AccountButton';
 import { api } from '../services/api';
 
 const CATEGORIES = ['Todos', 'Hidráulica', 'Elétrica', 'Pintura', 'Alvenaria'];
@@ -24,6 +25,8 @@ const CATEGORIES = ['Todos', 'Hidráulica', 'Elétrica', 'Pintura', 'Alvenaria']
 interface TelaHomeProps {
   onNavigateToNewOrder?: () => void;
   onNavigateToOrderDetails?: (orderId: string) => void;
+  /** Abre "Minha conta" (dados pessoais e sair). */
+  onNavigateToAccount?: () => void;
 }
 
 export interface ClientOrderItem {
@@ -45,6 +48,7 @@ export interface ClientOrderItem {
 export const TelaHome: React.FC<TelaHomeProps> = ({
   onNavigateToNewOrder,
   onNavigateToOrderDetails,
+  onNavigateToAccount,
 }) => {
   const [clientId, setClientId] = useState<string>('');
   const [clientName, setClientName] = useState('Cliente');
@@ -54,7 +58,9 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [selectedTab, setSelectedTab] = useState<'open' | 'accepted' | 'completed'>('open');
+  const [selectedTab, setSelectedTab] = useState<'open' | 'accepted' | 'completed'>(
+    'open',
+  );
 
   // Controle do Modal de Avaliação
   const [reviewOrder, setReviewOrder] = useState<ClientOrderItem | null>(null);
@@ -119,8 +125,8 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
     selectedTab === 'open'
       ? openOrders
       : selectedTab === 'accepted'
-      ? acceptedOrders
-      : completedOrders;
+        ? acceptedOrders
+        : completedOrders;
 
   const filteredOrders = currentTabList.filter((order) => {
     const matchesCategory =
@@ -150,6 +156,7 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
         }
       >
         <View style={styles.topBar}>
+          <AccountButton name={clientName} onPress={onNavigateToAccount} />
           <View style={styles.greeting}>
             <Text style={styles.subGreeting}>Olá, {clientName}</Text>
             <Text style={styles.mainTitle}>Precisa de ajuda hoje?</Text>
@@ -200,8 +207,8 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
               {selectedTab === 'open'
                 ? 'Chamados Aguardando Profissional'
                 : selectedTab === 'accepted'
-                ? 'Chamados em Andamento'
-                : 'Serviços Finalizados'}
+                  ? 'Chamados em Andamento'
+                  : 'Serviços Finalizados'}
             </Text>
             <Text style={styles.counterBadge}>{filteredOrders.length}</Text>
           </View>
@@ -216,7 +223,8 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
               <Text style={styles.emptyIcon}>📦</Text>
               <Text style={styles.emptyTitle}>Você ainda não criou nenhum pedido</Text>
               <Text style={styles.emptyDesc}>
-                Precisa de reparo, reforma ou instalação? Faça sua solicitação agora mesmo.
+                Precisa de reparo, reforma ou instalação? Faça sua solicitação agora
+                mesmo.
               </Text>
               <Button
                 title="Criar Primeiro Pedido"
@@ -230,8 +238,8 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
                 {selectedTab === 'open'
                   ? 'Nenhum pedido aguardando no momento'
                   : selectedTab === 'accepted'
-                  ? 'Nenhum pedido aceito no momento'
-                  : 'Nenhum serviço concluído ainda'}
+                    ? 'Nenhum pedido aceito no momento'
+                    : 'Nenhum serviço concluído ainda'}
               </Text>
               <Text style={styles.emptyDesc}>
                 {search || selectedCategory !== 'Todos'
@@ -319,7 +327,6 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   newOrderBtn: {
-    borderRadius: 0,
     minHeight: minTouchTarget,
     paddingHorizontal: spacing.md,
   },
@@ -352,7 +359,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   orderCardWrapper: {
-    borderRadius: 0,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -391,7 +398,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 0,
+    borderRadius: radius.lg,
     gap: spacing.xs,
   },
   emptyIcon: {
@@ -411,7 +418,6 @@ const styles = StyleSheet.create({
   },
   emptyActionBtn: {
     marginTop: spacing.md,
-    borderRadius: 0,
     minHeight: minTouchTarget,
     paddingHorizontal: spacing.lg,
   },

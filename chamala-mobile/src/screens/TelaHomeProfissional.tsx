@@ -12,15 +12,18 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, spacing, typography, minTouchTarget } from '../theme';
+import { colors, spacing, typography, minTouchTarget, radius } from '../theme';
 import { StatCard } from '../components/StatCard';
 import { SwitchRow } from '../components/SwitchRow';
 import { Tabs } from '../components/Tabs';
 import { OrderCard } from '../components/OrderCard';
 import { api } from '../services/api';
+import { AccountButton } from '../components/AccountButton';
 
 interface TelaHomeProfissionalProps {
   onNavigateToOrderDetails?: (orderId: string) => void;
+  /** Abre "Minha conta" (dados pessoais e sair). */
+  onNavigateToAccount?: () => void;
 }
 
 export interface OrderItem {
@@ -47,9 +50,13 @@ const exibirAlerta = (titulo: string, mensagem: string) => {
 
 export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
   onNavigateToOrderDetails,
+  onNavigateToAccount,
 }) => {
+  const [professionalName, setProfessionalName] = useState('');
   const [isAvailable, setIsAvailable] = useState(true);
-  const [selectedTab, setSelectedTab] = useState<'disponiveis' | 'em_andamento' | 'historico'>('disponiveis');
+  const [selectedTab, setSelectedTab] = useState<
+    'disponiveis' | 'em_andamento' | 'historico'
+  >('disponiveis');
 
   const [availableOrders, setAvailableOrders] = useState<OrderItem[]>([]);
   const [myOrders, setMyOrders] = useState<OrderItem[]>([]);
@@ -78,6 +85,7 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
 
       const userJson = await AsyncStorage.getItem('@chamala:user');
       const user = userJson ? JSON.parse(userJson) : null;
+      if (user?.name) setProfessionalName(user.name);
 
       const nearbyPromise = api.get('/api/v1/orders/nearby', {
         params: { lat, lon, closestFirst: true },
@@ -114,7 +122,10 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
       const user = userJson ? JSON.parse(userJson) : null;
 
       if (!user?.id) {
-        exibirAlerta('Erro', 'Identificação do profissional não encontrada. Faça login novamente.');
+        exibirAlerta(
+          'Erro',
+          'Identificação do profissional não encontrada. Faça login novamente.',
+        );
         return;
       }
 
@@ -142,20 +153,16 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
       return;
     }
 
-    Alert.alert(
-      'Recusar Chamado',
-      'Deseja dispensar este chamado da sua lista?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Recusar',
-          style: 'destructive',
-          onPress: () => {
-            setAvailableOrders((prev) => prev.filter((item) => item.id !== orderId));
-          },
+    Alert.alert('Recusar Chamado', 'Deseja dispensar este chamado da sua lista?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Recusar',
+        style: 'destructive',
+        onPress: () => {
+          setAvailableOrders((prev) => prev.filter((item) => item.id !== orderId));
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const executarFinalizacao = async (order: OrderItem) => {
@@ -176,17 +183,15 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
 
       setMyOrders((prev) =>
         prev.map((item) =>
-          item.id === order.id ? { ...item, status: 'COMPLETED' } : item
-        )
+          item.id === order.id ? { ...item, status: 'COMPLETED' } : item,
+        ),
       );
 
       exibirAlerta('Concluído', 'Atendimento finalizado e movido para o Histórico!');
     } catch (err: any) {
       console.error('Erro ao finalizar pedido:', err?.response?.data || err?.message);
       const errMsg =
-        err?.response?.data?.message ||
-        err?.message ||
-        'Falha ao finalizar pedido.';
+        err?.response?.data?.message || err?.message || 'Falha ao finalizar pedido.';
       exibirAlerta('Aviso', errMsg);
     } finally {
       setActionLoadingId(null);
@@ -202,17 +207,13 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
       return;
     }
 
-    Alert.alert(
-      'Finalizar Serviço',
-      'Confirmar que este atendimento foi concluído?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Finalizar',
-          onPress: () => executarFinalizacao(order),
-        },
-      ]
-    );
+    Alert.alert('Finalizar Serviço', 'Confirmar que este atendimento foi concluído?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Finalizar',
+        onPress: () => executarFinalizacao(order),
+      },
+    ]);
   };
 
   const inProgressOrders = myOrders.filter((o) => o.status === 'ACCEPTED');
@@ -222,8 +223,8 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
     selectedTab === 'disponiveis'
       ? availableOrders
       : selectedTab === 'em_andamento'
-      ? inProgressOrders
-      : completedOrders;
+        ? inProgressOrders
+        : completedOrders;
 
   return (
     <ScrollView
@@ -240,9 +241,12 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
       }
     >
       <View style={styles.header}>
-        <View>
-          <Text style={styles.subtitle}>Painel Profissional</Text>
-          <Text style={styles.title}>Atendimentos</Text>
+        <View style={styles.headerRow}>
+          <View style={styles.headerTitles}>
+            <Text style={styles.subtitle}>Painel Profissional</Text>
+            <Text style={styles.title}>Atendimentos</Text>
+          </View>
+          <AccountButton name={professionalName} onPress={onNavigateToAccount} />
         </View>
 
         <View style={styles.statusBox}>
@@ -302,10 +306,12 @@ export const TelaHomeProfissional: React.FC<TelaHomeProfissionalProps> = ({
               {selectedTab === 'disponiveis'
                 ? 'Nenhum chamado aberto na região'
                 : selectedTab === 'em_andamento'
-                ? 'Nenhum serviço em andamento'
-                : 'Nenhum atendimento concluído ainda'}
+                  ? 'Nenhum serviço em andamento'
+                  : 'Nenhum atendimento concluído ainda'}
             </Text>
-            <Text style={styles.feedbackText}>Puxe para baixo para atualizar a lista.</Text>
+            <Text style={styles.feedbackText}>
+              Puxe para baixo para atualizar a lista.
+            </Text>
           </View>
         ) : (
           ordersToDisplay.map((demand) => {
@@ -386,6 +392,14 @@ const styles = StyleSheet.create({
   header: {
     gap: spacing.sm,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  headerTitles: {
+    flex: 1,
+  },
   subtitle: {
     ...typography.caption,
     color: colors.textMuted,
@@ -401,7 +415,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.sm,
     backgroundColor: colors.surface,
-    borderRadius: 0,
+    borderRadius: radius.lg,
   },
   statsRow: {
     flexDirection: 'row',
@@ -409,7 +423,7 @@ const styles = StyleSheet.create({
   },
   statWrapper: {
     flex: 1,
-    borderRadius: 0,
+    borderRadius: radius.lg,
   },
   ordersSection: {
     gap: spacing.md,
@@ -418,7 +432,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    borderRadius: 0,
+    borderRadius: radius.lg,
     overflow: 'hidden',
   },
   actionsRow: {

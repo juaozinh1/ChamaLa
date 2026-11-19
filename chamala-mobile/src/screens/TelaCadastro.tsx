@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { colors, spacing, typography, minTouchTarget } from '../theme';
 import { Button } from '../components/Button';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { FeedbackSheet } from '../components/FeedbackSheet';
 import { Input } from '../components/Input';
-import { AlertBanner } from '../components/AlertBanner';
+import { useToast } from '../components/Toast';
+import { RequiredMark } from '../components/FieldFeedback';
+import {
+  useFieldErrors,
+  resumoDosErros,
+  type FieldErrors,
+} from '../hooks/useFieldErrors';
 import { api } from '../services/api';
+
+type Campo = 'nome' | 'email' | 'telefone' | 'senha' | 'confirmarSenha';
 
 function formatarTelefone(text: string): string {
   const limpo = text.replace(/\D/g, '').slice(0, 11);
@@ -27,14 +31,35 @@ type TelaCadastroProps = {
   onNavigateToLogin?: () => void;
 };
 
-export const TelaCadastro: React.FC<TelaCadastroProps> = ({ navigation, onSuccess }) => {
+export const TelaCadastro: React.FC<TelaCadastroProps> = ({
+  navigation,
+  onSuccess,
+  onNavigateToLogin,
+}) => {
+  const [cadastroOk, setCadastroOk] = useState(false);
+
+  const voltar =
+    onNavigateToLogin ?? (navigation?.goBack ? () => navigation.goBack() : undefined);
+
+  const irParaLogin = () => {
+    setCadastroOk(false);
+    if (onSuccess) {
+      onSuccess();
+    } else if (navigation?.navigate) {
+      navigation.navigate('Login');
+    } else if (navigation?.goBack) {
+      navigation.goBack();
+    }
+  };
+
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { errors, setErrors, clearError } = useFieldErrors<Campo>();
+  const { toast, showToast } = useToast();
 
   const validarEmail = (emailStr: string): boolean => {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,35 +67,27 @@ export const TelaCadastro: React.FC<TelaCadastroProps> = ({ navigation, onSucces
   };
 
   const handleCadastrar = async () => {
-    if (!nome.trim()) {
-      setError('Informe seu nome completo.');
-      return;
-    }
-
-    if (!email.trim() || !validarEmail(email)) {
-      setError('Informe um e-mail válido.');
-      return;
-    }
-
     const apenasDigitosTelefone = telefone.replace(/\D/g, '');
-    if (apenasDigitosTelefone.length < 10) {
-      setError('Informe um número de telefone com DDD válido.');
-      return;
-    }
+    const erros: FieldErrors<Campo> = {};
 
-    if (senha.length < 6) {
-      setError('A senha deve ter no mínimo 6 caracteres.');
-      return;
-    }
+    if (!nome.trim()) erros.nome = 'Informe seu nome completo.';
+    if (!email.trim()) erros.email = 'Informe seu e-mail.';
+    else if (!validarEmail(email)) erros.email = 'Informe um e-mail válido.';
+    if (apenasDigitosTelefone.length < 10)
+      erros.telefone = 'Informe um telefone com DDD válido.';
+    if (senha.length < 6) erros.senha = 'A senha deve ter no mínimo 6 caracteres.';
+    if (!confirmarSenha) erros.confirmarSenha = 'Repita a senha.';
+    else if (senha !== confirmarSenha) erros.confirmarSenha = 'As senhas não coincidem.';
 
-    if (senha !== confirmarSenha) {
-      setError('As senhas não coincidem.');
+    setErrors(erros);
+    const resumo = resumoDosErros(erros);
+    if (resumo) {
+      showToast(resumo);
       return;
     }
 
     try {
       setSubmitting(true);
-      setError(null);
 
       const payload = {
         name: nome.trim(),
@@ -81,117 +98,147 @@ export const TelaCadastro: React.FC<TelaCadastroProps> = ({ navigation, onSucces
 
       await api.post('/api/v1/auth/register/client', payload);
 
-      Alert.alert(
-        'Conta Criada com Sucesso!',
-        'Seu cadastro foi realizado. Faça login para continuar.',
-        [
-          {
-            text: 'Ir para o Login',
-            onPress: () => {
-              if (onSuccess) {
-                onSuccess();
-              } else if (navigation?.navigate) {
-                navigation.navigate('Login');
-              } else if (navigation?.goBack) {
-                navigation.goBack();
-              }
-            },
-          },
-        ],
-        { cancelable: false }
-      );
+      setCadastroOk(true);
     } catch (err: any) {
       const apiMessage =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
         'Não foi possível concluir o cadastro.';
-      setError(apiMessage);
+      showToast(apiMessage);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.contentContainer}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Criar Conta</Text>
-        <Text style={styles.subtitle}>
-          Cadastre-se para solicitar serviços e orçamentos na sua região.
-        </Text>
-      </View>
-
-      {error ? <AlertBanner message={error} /> : null}
-
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nome Completo</Text>
-          <Input
-            value={nome}
-            onChangeText={setNome}
-            placeholder="Ex: Maria Souza"
-            autoCapitalize="words"
-          />
+    <View style={styles.root}>
+      <ScreenHeader title="Criar conta" onBack={voltar} backLabel="Voltar para o login" />
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Criar Conta</Text>
+          <Text style={styles.subtitle}>
+            Cadastre-se para solicitar serviços e orçamentos na sua região.
+          </Text>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>E-mail</Text>
-          <Input
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Ex: cliente@email.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
+        <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Nome Completo
+              <RequiredMark />
+            </Text>
+            <Input
+              value={nome}
+              onChangeText={(t) => {
+                setNome(t);
+                clearError('nome');
+              }}
+              error={errors.nome}
+              placeholder="Ex: Maria Souza"
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              E-mail
+              <RequiredMark />
+            </Text>
+            <Input
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                clearError('email');
+              }}
+              error={errors.email}
+              placeholder="Ex: cliente@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Telefone / WhatsApp
+              <RequiredMark />
+            </Text>
+            <Input
+              value={telefone}
+              onChangeText={(t) => {
+                setTelefone(formatarTelefone(t));
+                clearError('telefone');
+              }}
+              error={errors.telefone}
+              placeholder="(81) 98765-4321"
+              keyboardType="phone-pad"
+              maxLength={15}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Senha
+              <RequiredMark />
+            </Text>
+            <Input
+              value={senha}
+              onChangeText={(t) => {
+                setSenha(t);
+                clearError('senha');
+              }}
+              error={errors.senha}
+              placeholder="Mínimo 6 caracteres"
+              secureTextEntry
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Confirmar Senha
+              <RequiredMark />
+            </Text>
+            <Input
+              value={confirmarSenha}
+              onChangeText={(t) => {
+                setConfirmarSenha(t);
+                clearError('confirmarSenha');
+              }}
+              error={errors.confirmarSenha}
+              placeholder="Repita a senha"
+              secureTextEntry
+            />
+          </View>
+
+          <Button
+            title="Cadastrar"
+            loading={submitting}
+            onPress={handleCadastrar}
+            style={styles.submitBtn}
           />
         </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Telefone / WhatsApp</Text>
-          <Input
-            value={telefone}
-            onChangeText={(t) => setTelefone(formatarTelefone(t))}
-            placeholder="(81) 98765-4321"
-            keyboardType="phone-pad"
-            maxLength={15}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Senha</Text>
-          <Input
-            value={senha}
-            onChangeText={setSenha}
-            placeholder="Mínimo 6 caracteres"
-            secureTextEntry
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Confirmar Senha</Text>
-          <Input
-            value={confirmarSenha}
-            onChangeText={setConfirmarSenha}
-            placeholder="Repita a senha"
-            secureTextEntry
-          />
-        </View>
-
-        <Button
-          title="Cadastrar"
-          loading={submitting}
-          onPress={handleCadastrar}
-          style={styles.submitBtn}
-        />
-      </View>
-    </ScrollView>
+      </ScrollView>
+      <FeedbackSheet
+        visible={cadastroOk}
+        title="Cadastro concluído"
+        headline="Sua conta foi criada"
+        message="Agora é só entrar com seu e-mail e senha para pedir serviços na sua região."
+        actions={[{ label: 'Ir para o login', onPress: irParaLogin }]}
+      />
+      {toast}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -225,6 +272,5 @@ const styles = StyleSheet.create({
   submitBtn: {
     marginTop: spacing.sm,
     minHeight: minTouchTarget,
-    borderRadius: 0,
   },
 });
