@@ -53,28 +53,33 @@ export const LeafletMapPicker = ({ initialCoords, onLocationSelected }: LeafletM
     </html>
   `;
 
+  // Hooks ficam antes de qualquer return (rules-of-hooks).
+  const webViewRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Só no navegador o mapa (iframe) conversa com a página via postMessage.
+    if (Platform.OS !== 'web') return;
+    const handleWebMessage = (event: MessageEvent) => {
+      try {
+        if (typeof event.data === 'string') {
+          const data = JSON.parse(event.data);
+          if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
+            onLocationSelected(data);
+          }
+        }
+      } catch {
+        // Ignora mensagens de outras extensões do browser
+      }
+    };
+
+    window.addEventListener('message', handleWebMessage);
+    return () => window.removeEventListener('message', handleWebMessage);
+  }, [onLocationSelected]);
+
   // ==========================================
   // Renderização para Navegador Web (Expo Web)
   // ==========================================
   if (Platform.OS === 'web') {
-    useEffect(() => {
-      const handleWebMessage = (event: MessageEvent) => {
-        try {
-          if (typeof event.data === 'string') {
-            const data = JSON.parse(event.data);
-            if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
-              onLocationSelected(data);
-            }
-          }
-        } catch {
-          // Ignora mensagens de outras extensões do browser
-        }
-      };
-
-      window.addEventListener('message', handleWebMessage);
-      return () => window.removeEventListener('message', handleWebMessage);
-    }, [onLocationSelected]);
-
     return (
       <View style={globalStyles.mapContainer}>
         <iframe
@@ -91,7 +96,6 @@ export const LeafletMapPicker = ({ initialCoords, onLocationSelected }: LeafletM
   // ==========================================
   const { WebView: RNWebView } = require('react-native-webview');
   const WebView = RNWebView as React.ComponentType<any>;
-  const webViewRef = useRef<any>(null);
 
   return (
     <View style={globalStyles.mapContainer}>

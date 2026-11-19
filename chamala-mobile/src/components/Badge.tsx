@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
+    borderRadius: radius.full,
   },
   text: { ...typography.caption, fontWeight: '600' },
 });

@@ -32,7 +32,13 @@ function formatarTelefone(text: string): string {
   return `(${limpo.slice(0, 2)}) ${limpo.slice(2, 7)}-${limpo.slice(7)}`;
 }
 
-export const TelaCadastroProfissional: React.FC<{ navigation?: any }> = ({ navigation }) => {
+type TelaCadastroProfissionalProps = {
+  navigation?: any;
+  /** Chamado depois do cadastro, ao tocar em "Ir para o Login" (usado pelo App.tsx). */
+  onSuccess?: () => void;
+};
+
+export const TelaCadastroProfissional: React.FC<TelaCadastroProfissionalProps> = ({ navigation, onSuccess }) => {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
@@ -145,7 +151,9 @@ export const TelaCadastroProfissional: React.FC<{ navigation?: any }> = ({ navig
           {
             text: 'Ir para o Login',
             onPress: () => {
-              if (navigation?.navigate) {
+              if (onSuccess) {
+                onSuccess();
+              } else if (navigation?.navigate) {
                 navigation.navigate('Login');
               } else if (navigation?.goBack) {
                 navigation.goBack();

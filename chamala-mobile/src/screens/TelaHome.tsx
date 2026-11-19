@@ -105,6 +105,9 @@ export const TelaHome: React.FC<TelaHomeProps> = ({
   }, []);
 
   useEffect(() => {
+    // Falso positivo: carregarPedidos só chama setState depois do primeiro await
+    // (AsyncStorage/API), nunca de forma síncrona dentro do efeito.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     carregarPedidos();
   }, [carregarPedidos]);
 

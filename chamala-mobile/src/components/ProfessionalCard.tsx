@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 4,
     height: 4,
-    borderRadius: radius.pill,
+    borderRadius: radius.full,
     marginHorizontal: spacing.sm,
     backgroundColor: colors.border,
   },

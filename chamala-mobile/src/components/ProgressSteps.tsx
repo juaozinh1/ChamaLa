@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
   bar: {
     flex: 1,
     height: 4,
-    borderRadius: radius.pill,
+    borderRadius: radius.full,
     backgroundColor: colors.border,
   },
   barOn: { backgroundColor: colors.primary },

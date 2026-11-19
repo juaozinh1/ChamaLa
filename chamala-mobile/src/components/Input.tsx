@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TextInputInstance,
   TextInputProps,
   View,
   ViewStyle,
@@ -23,7 +24,7 @@ type InputProps = TextInputProps & {
 };
 
 // forwardRef permite focar o próximo campo: ref.current?.focus() no onSubmitEditing.
-export const Input = forwardRef<TextInput, InputProps>(function Input(
+export const Input = forwardRef<TextInputInstance, InputProps>(function Input(
   { label, error, helperText, leftIcon, containerStyle, style, onFocus, onBlur, ...rest },
   ref,
 ) {

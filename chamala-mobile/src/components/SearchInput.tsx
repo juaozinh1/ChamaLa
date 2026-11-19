@@ -1,9 +1,9 @@
 import React, { forwardRef } from 'react';
-import { TextInput, TextInputProps } from 'react-native';
+import { TextInputInstance, TextInputProps } from 'react-native';
 import { Input } from './Input';
 
 // Campo de busca com lupa. Ex.: <SearchInput placeholder="Buscar categoria..." value={q} onChangeText={setQ} />
-export const SearchInput = forwardRef<TextInput, TextInputProps>(function SearchInput(
+export const SearchInput = forwardRef<TextInputInstance, TextInputProps>(function SearchInput(
   props,
   ref,
 ) {
